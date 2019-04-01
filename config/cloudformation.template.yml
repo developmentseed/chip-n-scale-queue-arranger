@@ -1,0 +1,485 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'stack: {{stackName}} | stage: {{stage}} | deployed by Kes'
+Resources:
+
+  #################################################
+  # Lambda config BEGIN
+  #################################################
+{{#each lambdas}}
+  {{name}}LambdaFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      Code:
+        S3Bucket: {{bucket}}
+        S3Key: {{remote}}
+      FunctionName: {{../stackName}}-{{name}}
+      Environment:
+        Variables:
+          stage: {{../stage}}
+          stackName: {{../stackName}}
+          PREDICTION_ENDPOINT:
+            Fn::Join:
+            - ''
+            - - 'http://'
+              - !GetAtt {{../stackNoDash}}LoadBalancer.DNSName
+              - {{{../predictionPath}}}
+              - ':predict'
+          DATABASE_URL:
+            Fn::Join:
+            - ''
+            - - 'postgres://{{../rds.username}}:{{../rds.password}}@'
+              - !GetAtt {{../stackNoDash}}ResultsDB.Endpoint.Address
+              - ':'
+              - !GetAtt {{../stackNoDash}}ResultsDB.Endpoint.Port
+              - '/'
+              - ResultsDB
+        {{#each envs}}
+          {{@key}}: {{{this}}}
+        {{/each}}
+      Handler: {{handler}}
+      MemorySize: {{memory}}
+      Role: !GetAtt LambdaProcessingRole.Arn
+      Runtime: {{# if runtime}}{{runtime}}{{else}}nodejs8.10{{/if}}
+      {{# if concurrent}}
+      ReservedConcurrentExecutions: {{concurrent}}
+      {{/if}}
+      Timeout: {{timeout}}
+      Tags:
+        - Key: Project
+          Value: {{../stackName}}
+
+  {{#if queueTrigger}}
+  {{../stackNoDash}}{{name}}LambdaEventSourceMapping:
+    Type: AWS::Lambda::EventSourceMapping
+    Properties:
+      Enabled: True
+      EventSourceArn: !GetAtt {{../stackNoDash}}TileQueue.Arn
+      FunctionName: !Ref {{name}}LambdaFunction
+  {{/if}}
+{{/each}}
+
+  #################################################
+  # Lambda config END
+  #################################################
+
+  #################################################
+  # SQS config BEGIN
+  #################################################
+
+  {{stackNoDash}}TileQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: {{stackNoDash}}TileQueue
+      VisibilityTimeout: {{sqs.visibilityTimeout}}
+      RedrivePolicy:
+        deadLetterTargetArn: !GetAtt {{stackNoDash}}DeadLetterQueue.Arn
+        maxReceiveCount: {{sqs.maxReceiveCount}}
+      Tags:
+        - Key: Project
+          Value: {{stackName}}
+
+  {{stackNoDash}}DeadLetterQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: {{stackNoDash}}DeadLetterQueue
+      Tags:
+        - Key: Project
+          Value: {{stackName}}
+
+  #################################################
+  # SQS config END
+  #################################################
+
+  #################################################
+  # ECS config BEGIN
+  #################################################
+
+  {{stackNoDash}}InstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      Path: "/"
+      Roles:
+      - !Ref ECSRole
+
+  {{stackNoDash}}TaskDefinition:
+    Type: AWS::ECS::TaskDefinition
+    Properties:
+      Family: {{stackName}}-TaskDefinition
+      ContainerDefinitions:
+      - Name: {{stackNoDash}}TaskDefinition
+        Essential: true
+        Image: {{ecs.image}}
+        MemoryReservation: {{ecs.memory}}
+        PortMappings:
+          - ContainerPort: 8501
+        LogConfiguration:
+          LogDriver: awslogs
+          Options:
+            awslogs-group: !Ref {{stackNoDash}}DockerLogs
+            awslogs-region: !Sub ${AWS::Region}
+
+  {{stackNoDash}}DockerLogs:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: {{stackName}}-ecs-docker
+
+  {{stackNoDash}}ECSService:
+    Type: AWS::ECS::Service
+    DependsOn:
+    - {{stackNoDash}}ECSAutoScalingGroup
+    Properties:
+      Cluster: !Ref {{stackNoDash}}ECSCluster
+      DesiredCount: 1
+      TaskDefinition: !Ref {{stackNoDash}}TaskDefinition
+      DeploymentConfiguration:
+        MaximumPercent: 100
+        MinimumHealthyPercent: 0
+      LoadBalancers:
+        - ContainerName: {{stackNoDash}}TaskDefinition
+          ContainerPort: 8501
+          TargetGroupArn: !Ref {{stackNoDash}}TargetGroup
+
+  {{stackNoDash}}ECSCluster:
+    Type: AWS::ECS::Cluster
+
+  {{stackNoDash}}ContainerInstanceLaunch:
+    Type: AWS::AutoScaling::LaunchConfiguration
+    Metadata:
+      AWS::CloudFormation::Init:
+        config:
+          commands:
+            01_add_instance_to_cluster:
+              command: !Sub |
+                #!/bin/bash
+                echo ECS_CLUSTER=${ {{stackNoDash}}ECSCluster} >> /etc/ecs/ecs.config
+                echo ECS_ENGINE_TASK_CLEANUP_WAIT_DURATION=1m >> /etc/ecs/ecs.config
+          files:
+            "/etc/cfn/cfn-hup.conf":
+              content: !Sub |
+                [main]
+                stack=${AWS::StackId}
+                region=${AWS::Region}
+              mode: '000400'
+              owner: root
+              group: root
+            "/etc/cfn/hooks.d/cfn-auto-reloader.conf":
+              content: !Sub |
+                [cfn-auto-reloader-hook]
+                triggers=post.update
+                path=Resources.{{stackNoDash}}ContainerInstanceLaunch.Metadata.AWS::CloudFormation::Init
+                action=/opt/aws/bin/cfn-init -v --stack ${AWS::StackName} --resource {{stackNoDash}}ContainerInstanceLaunch --region ${AWS::Region}
+                runas=root
+          services:
+            sysvinit:
+              cfn-hup:
+                enabled: 'true'
+                ensureRunning: 'true'
+                files:
+                - "/etc/cfn/cfn-hup.conf"
+                - "/etc/cfn/hooks.d/cfn-auto-reloader.conf"
+    Properties:
+      SecurityGroups:
+        -  !Ref {{stackNoDash}}ECSHostSecurityGroup
+      ImageId: !FindInMap [AWSRegionToAMI, !Ref "AWS::Region", AMIID]
+      InstanceType: {{ecs.instanceType}}
+      IamInstanceProfile: !Ref {{stackNoDash}}InstanceProfile
+      BlockDeviceMappings:
+      - DeviceName: "/dev/xvdcz"
+        Ebs:
+          DeleteOnTermination: true
+          VolumeSize: 100
+          VolumeType: gp2
+      KeyName: {{ ecs.keyPairName }}
+      UserData:
+        "Fn::Base64": !Join
+          - ""
+          - - "#cloud-config\n"
+            - "\nruncmd:\n"
+            - " - yum install -y aws-cfn-bootstrap\n"
+            - !Sub " - /opt/aws/bin/cfn-init -v --stack ${AWS::StackName} --resource {{stackNoDash}}ContainerInstanceLaunch --region ${AWS::Region}\n"
+            - !Sub " - /opt/aws/bin/cfn-signal -e $? --stack ${AWS::StackName} --resource {{stackNoDash}}ECSAutoScalingGroup --region ${AWS::Region}\n"
+    DependsOn:
+    - {{stackNoDash}}ECSHostSecurityGroup
+
+  {{stackNoDash}}ECSAutoScalingGroup:
+    Type: AWS::AutoScaling::AutoScalingGroup
+    UpdatePolicy:
+      AutoScalingRollingUpdate:
+        MinInstancesInService: 0
+    Properties:
+      AvailabilityZones:
+        - {{ecs.availabilityZone}}
+      LaunchConfigurationName: !Ref {{stackNoDash}}ContainerInstanceLaunch
+      MinSize: 1
+      MaxSize: {{ ecs.maxInstances }}
+      DesiredCapacity: {{ ecs.desiredInstances }}
+      Tags:
+      - Key: Name
+        Value: "{{stackName}} ECS"
+        PropagateAtLaunch: true
+      - Key: Project
+        Value: {{stackName}}
+        PropagateAtLaunch: true
+
+  {{stackNoDash}}ECSHostSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      VpcId: {{vpc}}
+      GroupDescription: Access to the ECS hosts and the tasks/containers that run on them
+      SecurityGroupIngress:
+        # Only allow inbound access to ECS from the ELB
+        - SourceSecurityGroupId: !Ref {{stackNoDash}}LoadBalancerSecurityGroup
+          IpProtocol: -1
+
+  #################################################
+  # ECS config END
+  #################################################
+
+  #################################################
+  # RDS config BEGIN
+  #################################################
+
+  {{stackNoDash}}ResultsDB:
+    Type: AWS::RDS::DBInstance
+    Properties:
+      DBName: ResultsDB
+      AllocatedStorage: {{rds.storage}}
+      DBInstanceClass: {{rds.instanceType}}
+      Engine: postgres
+      EngineVersion: 9.6.2
+      MasterUsername: {{rds.username}}
+      MasterUserPassword: {{rds.password}}
+      Tags:
+        - Key: Project
+          Value: {{stackName}}
+
+  #################################################
+  # RDS config END
+  #################################################
+
+  #################################################
+  # Load Balancer BEGIN
+  #################################################
+
+  {{stackNoDash}}LoadBalancer:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      SecurityGroups:
+        - !Ref {{stackNoDash}}LoadBalancerSecurityGroup
+      Subnets:
+        {{#each subnets}}
+        - {{{this}}}
+        {{/each}}
+      Tags:
+        - Key: Project
+          Value: {{stackName}}
+
+  {{stackNoDash}}TargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      VpcId: {{vpc}}
+      Port: 80
+      Protocol: HTTP
+      Matcher:
+        HttpCode: 200-299
+      HealthCheckIntervalSeconds: 30
+      HealthCheckPath: {{predictionPath}}
+      HealthCheckProtocol: HTTP
+      HealthCheckTimeoutSeconds: 5
+      HealthyThresholdCount: 5
+    DependsOn:
+      - {{stackNoDash}}LoadBalancer
+
+  {{stackNoDash}}LoadBalancerListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      LoadBalancerArn: !Ref {{stackNoDash}}LoadBalancer
+      Port: 80
+      Protocol: HTTP
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref {{stackNoDash}}TargetGroup
+
+  {{stackNoDash}}ListenerRule:
+    Type: AWS::ElasticLoadBalancingV2::ListenerRule
+    Properties:
+      ListenerArn: !Ref {{stackNoDash}}LoadBalancerListener
+      Priority: 2
+      Conditions:
+        - Field: path-pattern
+          Values:
+            - {{{predictionPath}}}
+      Actions:
+        - TargetGroupArn: !Ref {{stackNoDash}}TargetGroup
+          Type: forward
+
+  {{stackNoDash}}LoadBalancerSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      VpcId: {{vpc}}
+      GroupDescription: Access to the load balancer that sits in front of ECS
+      SecurityGroupIngress:
+        # Allow access from anywhere to our ECS services
+        - CidrIp: 0.0.0.0/0
+          IpProtocol: -1
+
+  #################################################
+  # Load Balancer END
+  #################################################
+
+
+  #################################################
+  # IAM config BEGIN
+  #################################################
+
+  LambdaProcessingRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: "{{stackName}}-lambda-processing"
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      Path: "/"
+      Policies:
+        - PolicyName: ProcessingLambda
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - lambda:GetFunction
+                  - lambda:invokeFunction
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:DescribeLogStreams
+                  - logs:PutLogEvents
+                Resource: "*"
+              # Allow writing to ingest buckets
+              - Effect: Allow
+                Action:
+                  - s3:AbortMultipartUpload
+                  - s3:Get*
+                  - s3:Put*
+                  - s3:List*
+                  - s3:DeleteObject
+                  - s3:DeleteObjectVersion
+                Resource:
+                  - !Sub "arn:aws:s3:::{{buckets.internal}}"
+                  - !Sub "arn:aws:s3:::{{buckets.internal}}/*"
+              # Allow access to SQS
+              - Effect: Allow
+                Action:
+                  - sqs:SendMessage
+                  - sqs:ReceiveMessage
+                  - sqs:ChangeMessageVisibility
+                  - sqs:DeleteMessage
+                  - sqs:GetQueueUrl
+                  - sqs:GetQueueAttributes
+                Resource: !Sub "arn:aws:sqs:${AWS::Region}:${AWS::AccountId}:{{stackNoDash}}TileQueue"
+
+  ECSRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub "{{stackName}}-ecs-role"
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - ec2.amazonaws.com
+                - ecs.amazonaws.com
+            Action: sts:AssumeRole
+      Path: "/"
+      Policies:
+        - PolicyName: ECSRole
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - cloudwatch:GetMetricStatistics
+                  - ecr:BatchCheckLayerAvailability
+                  - ecr:BatchGetImage
+                  - ecr:GetAuthorizationToken
+                  - ecr:GetDownloadUrlForLayer
+                  - ec2:AuthorizeSecurityGroupIngress
+                  - ec2:Describe*
+                  - ecs:DeregisterContainerInstance
+                  - ecs:DescribeClusters
+                  - ecs:DescribeContainerInstances
+                  - ecs:DescribeServices
+                  - ecs:DiscoverPollEndpoint
+                  - ecs:ListContainerInstances
+                  - ecs:ListServices
+                  - ecs:ListTaskDefinitions
+                  - ecs:ListTasks
+                  - ecs:Poll
+                  - ecs:RegisterContainerInstance
+                  - ecs:RunTask
+                  - ecs:StartTelemetrySession
+                  - ecs:Submit*
+                  - lambda:GetFunction
+                  - lambda:invokeFunction
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:DescribeLogStreams
+                  - logs:PutLogEvents
+                Resource: "*"
+
+           # Allow interaction with internal buckets
+              - Effect: Allow
+                Action:
+                  - s3:AbortMultipartUpload
+                  - s3:Get*
+                  - s3:Put*
+                  - s3:List*
+                  - s3:DeleteObject
+                  - s3:DeleteObjectVersion
+                Resource:
+                  - !Sub "arn:aws:s3:::{{buckets.internal}}"
+                  - !Sub "arn:aws:s3:::{{buckets.internal}}/*"
+
+            # Allow interaction with the load balancer
+              - Effect: Allow
+                Action:
+                  - elasticloadbalancing:*
+                Resource: "*"
+
+
+
+  #################################################
+  # IAM config END
+  #################################################
+
+Mappings:
+  AWSRegionToAMI:
+    DOCS:
+      LIST: http://docs.aws.amazon.com/AmazonECS/latest/developerguide/ecs-optimized_AMI.html
+    us-east-1:
+      AMIID: ami-07eb64b216d4d3522 # hardcoded, built via https://github.com/azavea/raster-vision-aws#create-the-custom-ami
+
+Outputs:
+  dbConnectionString:
+    Value:
+      Fn::Join:
+      - ''
+      - - 'postgres://{{rds.username}}:{{rds.password}}@'
+        - !GetAtt {{stackNoDash}}ResultsDB.Endpoint.Address
+        - ':'
+        - !GetAtt {{stackNoDash}}ResultsDB.Endpoint.Port
+        - '/'
+        - ResultsDB
+  queueURL:
+    Value: !Ref {{stackNoDash}}TileQueue
+  modelEndpoint:
+    Value:
+      Fn::Join:
+      - ''
+      - - 'http://'
+        - !GetAtt {{stackNoDash}}LoadBalancer.DNSName
+        - {{{predictionPath}}}

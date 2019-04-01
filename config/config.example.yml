@@ -1,0 +1,46 @@
+default:
+  stage: dev
+  stackName: your-stack
+  stackNoDash: YourStack
+  capabilities:
+     - CAPABILITY_NAMED_IAM
+  buckets:
+    internal: your-bucket # existing s3 bucket to store deployment artifacts
+
+  lambdas:
+  - DownloadAndPredict:
+      handler: index.handler
+      timeout: 60
+      memory: 512
+      source: dist/download-and-predict
+      queueTrigger: true
+      concurrent: 5
+      envs:
+        TILE_ACCESS_TOKEN: '{{TILE_ACCESS_TOKEN}}'
+        TILE_ENDPOINT: 'https://example.com/{}/{}/{}.jpg?access_token={}'
+
+  rds:
+    username: '{{RDS_USERNAME}}'
+    password: '{{RDS_PASSWORD}}'
+    storage: 20
+    instanceType: 'db.t2.medium'
+
+  vpc: your-vpc # existing VPC containing the two subnets below
+  subnets:
+    - subnet 1
+    - subnet 2
+
+  ecs:
+    availabilityZone: us-east-1
+    maxInstances: 1
+    desiredInstances: 1
+    keyPairName: your-key-pair
+    instanceType: t2.nano # replace with a GPU instance for faster predictions (and higher costs)
+    image: tensorflow/serving:latest # docker image containing your inference model built with TF Serving
+    memory: 1000 # replace with the memory required by your TF Serving docker image
+
+  sqs:
+    visibilityTimeout: 60
+    maxReceiveCount: 5
+
+  predictionPath: '/v1/models/your_model' # path to your model on the TF Serving docker image; don't include :predict
