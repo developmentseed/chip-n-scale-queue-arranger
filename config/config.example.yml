@@ -31,7 +31,7 @@ default:
     - subnet 2
 
   ecs:
-    availabilityZone: us-east-1
+    availabilityZone: us-east-1a
     maxInstances: 1
     desiredInstances: 1
     keyPairName: your-key-pair
