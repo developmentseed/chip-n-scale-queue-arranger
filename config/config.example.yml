@@ -8,7 +8,7 @@ default:
     internal: your-bucket # existing s3 bucket to store deployment artifacts
 
   lambdas:
-  - DownloadAndPredict:
+    DownloadAndPredict:
       handler: index.handler
       timeout: 60
       memory: 512
