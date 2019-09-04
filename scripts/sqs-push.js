@@ -7,8 +7,8 @@ const { SQS } = require('aws-sdk')
 const uuidv4 = require('uuid/v4')
 
 const promiseThreshold = process.env.PROMISE_THRESHOLD || 500
-const highWaterMark = 10
 const queue = process.argv[3]
+const errors = []
 let count = 0
 
 const transform = new Transform({
@@ -36,14 +36,15 @@ class SqsWriteStream extends Writable {
    */
   constructor (queue, options) {
     super({
-      objectMode: true,
-      highWaterMark
+      objectMode: true
     })
     this.queueUrl = queue.url
     this.sqs = new SQS()
     this.activePromises = new Map()
     this.decrementActivePromises = this.decrementActivePromises.bind(this)
+    this.sendMessages = this.sendMessages.bind(this)
     this.paused = false
+    this.buffer = []
   }
 
   decrementActivePromises (id) {
@@ -54,33 +55,52 @@ class SqsWriteStream extends Writable {
     }
   }
 
+  sendMessages (Entries) {
+    const Id = uuidv4()
+    const promise = this.sqs.sendMessageBatch({
+      Entries,
+      QueueUrl: this.queueUrl
+    })
+      .promise()
+      .then((data) => {
+        if (data.Failed && data.Failed.length > 0) {
+          data.Failed.forEach((error) => {
+            errors.push(error)
+          })
+        }
+        this.decrementActivePromises(Id)
+      })
+      .catch((error) => {
+        errors.push(`Error: ${error}`)
+        this.decrementActivePromises(Id)
+      })
+    this.activePromises.set(Id, promise)
+  }
+
   _write (obj, enc, cb) {
     if (this.activePromises.size >= promiseThreshold) {
       this.paused = true
       this.cb = cb
+      this.buffer.push(obj)
+      return false
     } else {
       try {
+        this.buffer.forEach((bufferedObject) => {
+          const Entries = obj.map((object) => ({
+            MessageBody: object,
+            Id: uuidv4()
+          }))
+          this.sendMessages(Entries)
+        })
+        this.buffer = []
         const Entries = obj.map((object) => ({
           MessageBody: object,
           Id: uuidv4()
         }))
-        const Id = uuidv4()
-        const promise = this.sqs.sendMessageBatch({
-          Entries,
-          QueueUrl: this.queueUrl
-        })
-          .promise()
-          .then(() => {
-            this.decrementActivePromises(Id)
-          })
-          .catch((error) => {
-            logUpdate(`Error: ${error}`)
-            this.decrementActivePromises(Id)
-          })
-        this.activePromises.set(Id, promise)
+        this.sendMessages(Entries)
         return cb()
       } catch (err) {
-        logUpdate(`Error: ${err}`)
+        errors.push(`Error: ${err}`)
         return cb(err)
       }
     }
@@ -95,6 +115,11 @@ function run () {
     .pipe(transform)
     .pipe(through2Batch.obj({batchSize: 10}))
     .pipe(sqsStream)
+  sqsStream.on('finish', () => {
+    if (errors.length > 0) {
+      console.log(errors)
+    }
+  })
 }
 
 module.exports = {
