@@ -85,14 +85,16 @@ class SqsWriteStream extends Writable {
       return false
     } else {
       try {
-        this.buffer.forEach((bufferedObject) => {
-          const Entries = obj.map((object) => ({
-            MessageBody: object,
-            Id: uuidv4()
-          }))
-          this.sendMessages(Entries)
-        })
-        this.buffer = []
+        if (this.buffer.length > 0) {
+          this.buffer.forEach((bufferedObject) => {
+            const Entries = obj.map((object) => ({
+              MessageBody: object,
+              Id: uuidv4()
+            }))
+            this.sendMessages(Entries)
+          })
+          this.buffer = []
+        }
         const Entries = obj.map((object) => ({
           MessageBody: object,
           Id: uuidv4()
@@ -117,7 +119,7 @@ function run () {
     .pipe(sqsStream)
   sqsStream.on('finish', () => {
     if (errors.length > 0) {
-      console.log(errors)
+      logUpdate(errors)
     }
   })
 }

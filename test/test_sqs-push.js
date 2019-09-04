@@ -39,7 +39,7 @@ test('sqs-push', (t) => {
   memStream.write('9-162-307\n9-161-307\n9-163-307')
   memStream.end('')
   setTimeout(() => {
-    t.equal(logUpdate.getCall(3).args[0], 'Error: error',
+    t.equal(logUpdate.getCall(3).args[0][0], 'Error: error',
       'Logs error when sqs message promise rejects')
     t.end()
   }, 1)
