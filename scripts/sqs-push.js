@@ -6,8 +6,10 @@ const logUpdate = require('log-update')
 const { SQS } = require('aws-sdk')
 const uuidv4 = require('uuid/v4')
 
-let count = 0
+const promiseThreshold = process.env.PROMISE_THRESHOLD || 500
 const queue = process.argv[3]
+const errors = []
+let count = 0
 
 const transform = new Transform({
   objectMode: true,
@@ -33,28 +35,95 @@ class SqsWriteStream extends Writable {
    * @param {Object} queue - An object with a url property
    */
   constructor (queue, options) {
-    super({ objectMode: true })
+    super({
+      objectMode: true
+    })
     this.queueUrl = queue.url
     this.sqs = new SQS()
+    this.activePromises = new Map()
+    this.decrementActivePromises = this.decrementActivePromises.bind(this)
+    this.sendMessages = this.sendMessages.bind(this)
+    this.paused = false
+    this.buffer = []
   }
 
-  async _write (obj, enc, cb) {
-    try {
-      const Entries = obj.map(o => ({ MessageBody: o, Id: uuidv4() }))
-      // TODO: add backpressure, handle memory bloat
-      this.sqs.sendMessageBatch({ Entries, QueueUrl: this.queueUrl }).promise()
-      return cb()
-    } catch (err) {
-      return cb(err)
+  decrementActivePromises (id) {
+    this.activePromises.delete(id)
+    if (this.paused && this.activePromises.size < promiseThreshold / 2) {
+      this.paused = false
+      this.cb()
+    }
+  }
+
+  sendMessages (Entries) {
+    const Id = uuidv4()
+    const promise = this.sqs.sendMessageBatch({
+      Entries,
+      QueueUrl: this.queueUrl
+    })
+      .promise()
+      .then((data) => {
+        if (data.Failed && data.Failed.length > 0) {
+          data.Failed.forEach((error) => {
+            errors.push(error)
+          })
+        }
+        this.decrementActivePromises(Id)
+      })
+      .catch((error) => {
+        errors.push(`Error: ${error}`)
+        this.decrementActivePromises(Id)
+      })
+    this.activePromises.set(Id, promise)
+  }
+
+  _write (obj, enc, cb) {
+    if (this.activePromises.size >= promiseThreshold) {
+      this.paused = true
+      this.cb = cb
+      this.buffer.push(obj)
+      return false
+    } else {
+      try {
+        if (this.buffer.length > 0) {
+          this.buffer.forEach((bufferedObject) => {
+            const Entries = obj.map((object) => ({
+              MessageBody: object,
+              Id: uuidv4()
+            }))
+            this.sendMessages(Entries)
+          })
+          this.buffer = []
+        }
+        const Entries = obj.map((object) => ({
+          MessageBody: object,
+          Id: uuidv4()
+        }))
+        this.sendMessages(Entries)
+        return cb()
+      } catch (err) {
+        errors.push(`Error: ${err}`)
+        return cb(err)
+      }
     }
   }
 }
 
-const sqsStream = new SqsWriteStream({ url: queue })
+function run () {
+  const sqsStream = new SqsWriteStream({ url: queue })
+  fs.createReadStream(process.argv[2])
+    .pipe(split())
+    .pipe(counter)
+    .pipe(transform)
+    .pipe(through2Batch.obj({batchSize: 10}))
+    .pipe(sqsStream)
+  sqsStream.on('finish', () => {
+    if (errors.length > 0) {
+      logUpdate(errors)
+    }
+  })
+}
 
-fs.createReadStream(process.argv[2])
-  .pipe(split())
-  .pipe(transform)
-  .pipe(counter)
-  .pipe(through2Batch.obj())
-  .pipe(sqsStream)
+module.exports = {
+  run
+}

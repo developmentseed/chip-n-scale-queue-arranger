@@ -69,7 +69,7 @@ where `x`, `y`, and `z` specify [an individual map tile](https://wiki.openstreet
 yarn sqs-push [tiles.txt] [https://your-queue-url]
 ```
 
- The first argument, `tiles.txt`, is a line-delimited file containing your tile indices in the format `x-y-z` and the second argument is the URL of your SQS Queue. If you have a lot of tiles to push to the queue, it's best to run this script in the background or on a separate computer.
+ The first argument, `tiles.txt`, is a line-delimited file containing your tile indices in the format `x-y-z` and the second argument is the URL of your SQS Queue. If you have a lot of tiles to push to the queue, it's best to run this script in the background or on a separate computer.  The maximum number of simultaneous inflight SQS requests can be set with the `PROMISE_THRESHOLD` environment variable.
 
 ## Completion
 
