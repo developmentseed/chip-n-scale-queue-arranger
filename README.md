@@ -71,6 +71,20 @@ yarn sqs-push [tiles.txt] [https://your-queue-url]
 
  The first argument, `tiles.txt`, is a line-delimited file containing your tile indices in the format `x-y-z` and the second argument is the URL of your SQS Queue. If you have a lot of tiles to push to the queue, it's best to run this script in the background or on a separate computer.  The maximum number of simultaneous inflight SQS requests can be set with the `PROMISE_THRESHOLD` environment variable.
 
+## Post processing
+
+Once the processing is complete, you can pull down the stored results as a simple CSV file.
+
+```sh
+DATABASE_URL='postgres://myusername:mypassword@your-db-string.rds.amazonaws.com:5432/ResultsDB' yarn download my_csv_filename.csv
+```
+
+You can then convert that CSV file to a geojson while thresholding on per-class ML confidence. For example, if you have a binary prediction and only want to keep tiles where confidence in class index 1 was 95% or greater, use something like:
+
+```sh
+yarn convert-geojson my_csv_filename.csv my_thresholded_features.geojson --thresh_ind 1 --thresh 0.95
+```
+
 ## Completion
 
 After the prediction is complete, you should download the data from the AWS RDS database. Then it's okay to delete the stack:
