@@ -12,6 +12,8 @@
     "gpu-util": "AWS_SDK_LOAD_CONFIG=true node scripts/gpu-util.js",
     "verify": "AWS_SDK_LOAD_CONFIG=true node scripts/verify.js",
     "sqs-push": "AWS_SDK_LOAD_CONFIG=true node scripts/run-sqs-push.js",
+    "download": "AWS_SDK_LOAD_CONFIG=true node scripts/download.js",
+    "convert-geojson": "python scripts/csv_to_geojson.py",
     "test": "node test/test_sqs-push.js"
   },
   "author": "Development Seed",
