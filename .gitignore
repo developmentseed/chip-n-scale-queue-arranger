@@ -3,5 +3,3 @@ dist
 cloudformation.yml
 node_modules
 .env
-package-lock.json
-config.yml
