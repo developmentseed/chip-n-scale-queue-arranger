@@ -111,7 +111,7 @@ def save_to_db(tiles, results, db=None, result_wrapper=None):
 
     for i, output in enumerate(results):
         result = result_wrapper(output) if result_wrapper else output
-        cursor.execute("INSERT INTO results VALUES (%s, %s)", (tiles[i], result))
+        cursor.execute("INSERT INTO results VALUES (%s, %s) ON CONFLICT (id) DO UPDATE SET output = %s", (tiles[i], result, result))
 
     conn.commit()
     conn.close()
