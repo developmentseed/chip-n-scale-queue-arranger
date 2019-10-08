@@ -12,15 +12,11 @@ from rasterio.windows import Window
 import pg8000
 
 
-class ResultType(Enum):
-    SCALAR = 1
-    ARRAY = 2
-    IMAGE = 3
-
 def _read_img(img):
     with MemoryFile(img) as memfile:
         with memfile.open() as dataset:
             return dataset.read()
+
 
 def get_tiles(event):
     """
@@ -89,6 +85,7 @@ def get_prediction_payload(tiles, imagery):
     payload = json.dumps(dict(instances=instances))
 
     return (payload, tile_indices)
+
 
 def save_to_db(tiles, results, db=None, result_wrapper=None):
     """
