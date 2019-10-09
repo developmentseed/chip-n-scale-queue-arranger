@@ -1,6 +1,6 @@
 from typing import Tuple
 
-class Tile(Tuple):
+class Tile():
     @property
     def x(self) -> int: ...
     @property

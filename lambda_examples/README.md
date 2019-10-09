@@ -15,6 +15,6 @@ Any additional third-party libraries should be added to `lambda/setup.py` for in
 
 Examples of customization are listed in this library to show how `chip-n-scale-queue-arranger` can be used with a variety of different tools.
 
-- [Download imagery from Sentinel Hub](). For more information, check out the [`sentinelhub-py` docs](https://sentinelhub-py.readthedocs.io/en/latest/).
+- [Download imagery from Sentinel Hub](sentinel_hub.py). For more information, check out the [`sentinelhub-py` docs](https://sentinelhub-py.readthedocs.io/en/latest/).
 - [Download larger tiles and create smaller tiles for inference](). This is useful for reducing the load on the imagery/tile endpoint.
-- [Save results to `ml-enabler`](). For more information, check out the [`ml-enabler` repo](https://github.com/hotosm/ml-enabler).
+- [Save results to `ml-enabler`](ml_enabler.py). For more information, check out the [`ml-enabler` repo](https://github.com/hotosm/ml-enabler).
