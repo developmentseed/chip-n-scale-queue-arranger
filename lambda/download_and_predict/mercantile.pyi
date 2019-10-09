@@ -1,4 +1,4 @@
-from typing import Tuple
+from typing import Tuple, Any, Callable
 
 class Tile():
     @property
@@ -7,3 +7,5 @@ class Tile():
     def y(self) -> int: ...
     @property
     def z(self) -> int: ...
+
+quadkey = Callable[[Any], str]

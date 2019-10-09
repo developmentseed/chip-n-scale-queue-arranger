@@ -2,8 +2,9 @@
 
 import os
 import datetime
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional, Callable
 from io import BytesIO
+from urllib.parse import urlparse
 
 from download_and_predict.base import DownloadAndPredict
 from download_and_predict.custom_types import SQSEvent
@@ -13,10 +14,15 @@ from mercantile import Tile, quadkey
 
 class MLEnablerSave(DownloadAndPredict):
     def __init__(self, imagery: str, db: str, prediction_endpoint: str, prediction_id: str):
-        super(DownloadAndPredict, self).__init__(imagery, db, prediction_endpoint)
+        # type annotatation error ignored, re: https://github.com/python/mypy/issues/5887
+        super(DownloadAndPredict, self).__init__(dict( # type: ignore
+            imagery=imagery,
+            db=db,
+            prediction_endpoint=prediction_endpoint
+        )) #
         self.prediction_id = prediction_id
 
-    def save_to_db(self, tiles:List[Tile], results:List[Any]) -> None:
+    def save_to_db(self, tiles:List[Tile], results:List[Any], result_wrapper:Optional[Callable]=None) -> None:
         db = urlparse(self.db)
 
         conn = pg8000.connect(

@@ -46,16 +46,17 @@ class DownloadAndPredict(object):
           in event['Records']
         ]
 
-    @staticmethod
-    def get_images(tiles: List[Tile], imagery:str) -> Iterator[Tuple[Tile, bytes]]:
-        for tile in tiles:
-            url = imagery.format(x=tile.x, y=tile.y, z=tile.z)
-            r = requests.get(url)
-            yield (tile, r.content)
 
     @staticmethod
     def b64encode_image(image_binary:bytes) -> str:
         return b64encode(image_binary).decode('utf-8').replace('/','_').replace('+','-')
+
+
+    def get_images(self, tiles: List[Tile]) -> Iterator[Tuple[Tile, bytes]]:
+        for tile in tiles:
+            url = self.imagery.format(x=tile.x, y=tile.y, z=tile.z)
+            r = requests.get(url)
+            yield (tile, r.content)
 
 
     def get_prediction_payload(self, tiles:List[Tile]) -> Tuple[List[Tile], str]:
@@ -70,7 +71,7 @@ class DownloadAndPredict(object):
         These arrays are returned together because they are parallel operations: we
         need to match up the tile indicies with their corresponding images
         """
-        tiles_and_images = self.get_images(tiles, self.imagery)
+        tiles_and_images = self.get_images(tiles)
         tile_indices, images = zip(*tiles_and_images)
 
         instances = [dict(image_bytes=dict(b64=self.b64encode_image(img))) for img in images]

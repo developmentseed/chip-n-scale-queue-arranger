@@ -2,7 +2,7 @@
 
 import os
 import datetime
-from typing import Dict, Any
+from typing import Dict, Any, Tuple, List, Iterator
 from io import BytesIO
 
 from download_and_predict.base import DownloadAndPredict
@@ -11,13 +11,19 @@ from download_and_predict.custom_types import SQSEvent
 import pg8000
 from sentinelhub import BBox, CRS, WmsRequest, MimeType, DataSource
 from PIL import Image
+from mercantile import bounds, Tile
 
 class SentinelHubDownloader(DownloadAndPredict):
     def __init__(self, imagery: str, db: str, prediction_endpoint: str, sentinel_wms_kwargs: Dict[str, Any]):
-        super(DownloadAndPredict, self).__init__(imagery, db, prediction_endpoint)
+        # type annotatation error ignored, re: https://github.com/python/mypy/issues/5887
+        super(DownloadAndPredict, self).__init__(dict( # type: ignore
+            imagery=imagery,
+            db=db,
+            prediction_endpoint=prediction_endpoint
+        ))
         self.sentinel_wms_kwargs = sentinel_wms_kwargs
 
-    def get_images(self, tiles: List[Tile], imagery:str) -> Iterator[Tuple[Tile, bytes]]:
+    def get_images(self, tiles: List[Tile]) -> Iterator[Tuple[Tile, bytes]]:
         for tile in tiles:
             # convert the tile index to a BBox with a buffer
             x, y, z = tile
