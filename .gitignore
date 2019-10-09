@@ -3,3 +3,5 @@ dist
 cloudformation.yml
 node_modules
 .env
+__pycache__
+.mypy_cache
