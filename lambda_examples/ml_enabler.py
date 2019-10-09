@@ -1,4 +1,4 @@
-"""Example AWS Lambda function for chip-n-scale"""
+"""Example AWS Lambda function for chip-n-scale with ml_enabler"""
 
 import os
 import datetime
