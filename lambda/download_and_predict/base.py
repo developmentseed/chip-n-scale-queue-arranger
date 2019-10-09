@@ -47,7 +47,7 @@ class DownloadAndPredict(object):
         ]
 
     @staticmethod
-    def get_tms_images(tiles: List[Tile], imagery:str) -> Iterator[Tuple[Tile, bytes]]:
+    def get_images(tiles: List[Tile], imagery:str) -> Iterator[Tuple[Tile, bytes]]:
         for tile in tiles:
             url = imagery.format(x=tile.x, y=tile.y, z=tile.z)
             r = requests.get(url)
@@ -70,7 +70,7 @@ class DownloadAndPredict(object):
         These arrays are returned together because they are parallel operations: we
         need to match up the tile indicies with their corresponding images
         """
-        tiles_and_images = self.get_tms_images(tiles, self.imagery)
+        tiles_and_images = self.get_images(tiles, self.imagery)
         tile_indices, images = zip(*tiles_and_images)
 
         instances = [dict(image_bytes=dict(b64=self.b64encode_image(img))) for img in images]
