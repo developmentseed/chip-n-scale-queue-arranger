@@ -13,8 +13,6 @@ from typing import Dict, List, NamedTuple, Callable, Optional, Tuple, Any, Itera
 
 from mercantile import Tile
 import requests
-from rasterio.io import MemoryFile
-from rasterio.windows import Window
 import pg8000
 
 from download_and_predict.custom_types import SQSEvent
@@ -49,7 +47,7 @@ class DownloadAndPredict(object):
 
     @staticmethod
     def b64encode_image(image_binary:bytes) -> str:
-        return b64encode(image_binary).decode('utf-8').replace('/','_').replace('+','-')
+        return b64encode(image_binary).decode('utf-8')
 
 
     def get_images(self, tiles: List[Tile]) -> Iterator[Tuple[Tile, bytes]]:
@@ -81,7 +79,8 @@ class DownloadAndPredict(object):
 
     def post_prediction(self, payload:str) -> Dict[str, Any]:
         r = requests.post(self.prediction_endpoint, data=payload)
-        return json.loads(r.content)
+        r.raise_for_status()
+        return r.json()
 
     def save_to_db(self, tiles:List[Tile], results:List[Any], result_wrapper:Optional[Callable]=None) -> None:
         """
@@ -104,7 +103,7 @@ class DownloadAndPredict(object):
 
         for i, output in enumerate(results):
             result = result_wrapper(output) if result_wrapper else output
-            cursor.execute("INSERT INTO results VALUES (%s, %s) ON CONFLICT (id) DO UPDATE SET output = %s", (tiles[i], result, result))
+            cursor.execute("INSERT INTO results VALUES (%s, %s) ON CONFLICT (tile) DO UPDATE SET output = %s", (tiles[i], result, result))
 
         conn.commit()
         conn.close()

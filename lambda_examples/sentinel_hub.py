@@ -56,12 +56,11 @@ def handler(event: SQSEvent, context: Dict[str, Any]) -> None:
         prediction_endpoint=prediction_endpoint,
         sentinel_wms_kwargs=dict(
             layer='MY-SENTINEL-HUB-LAYER',
-            width=166, height=168,
+            width=256, height=256,
             maxcc=0.20,
             instance_id=sh_instance_id,
             time=(f'2019-04-01', f'2019-07-30'),
             time_difference=datetime.timedelta(days=21),
-            image_format=MimeType.TIFF_d32f
       )
     )
 

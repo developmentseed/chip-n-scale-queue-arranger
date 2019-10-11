@@ -2,20 +2,10 @@
 
 import os
 import pg8000
-from typing import Dict, Any, List
-from io import BytesIO
-
-from PIL import Image
-import numpy as np
+from typing import Dict, Any
 
 from download_and_predict.base import DownloadAndPredict
 from download_and_predict.custom_types import SQSEvent
-
-def prediction_to_image(pred: List) -> bytes:
-    img = Image.fromarray(np.array(pred).astype(np.uint8))
-    byts = BytesIO()
-    img.save(byts, format='png')
-    return byts.getvalue()
 
 def handler(event: SQSEvent, context: Dict[str, Any]) -> None:
     # read all our environment variables to throw errors early
@@ -47,5 +37,5 @@ def handler(event: SQSEvent, context: Dict[str, Any]) -> None:
     dap.save_to_db(
         tile_indices,
         content['predictions'],
-        result_wrapper=prediction_to_image
+        result_wrapper=lambda x: pg8000.PGJsonb(x)
     )

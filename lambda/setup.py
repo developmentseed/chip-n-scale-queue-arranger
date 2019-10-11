@@ -5,6 +5,9 @@ from setuptools import setup, find_packages
 inst_reqs = [
     "mercantile",
     "pg8000",
+    "requests",
+    "pillow",
+    "numpy"
 ]
 extra_reqs = {"test": ["pytest", "pytest-cov"]}
 

@@ -7,7 +7,7 @@ ENV PACKAGE_PREFIX /tmp/python
 ################################################################################
 #                            CREATE PACKAGE                                    #
 ################################################################################
-COPY app app
+COPY download_and_predict download_and_predict
 COPY setup.py setup.py
 
 ENV \

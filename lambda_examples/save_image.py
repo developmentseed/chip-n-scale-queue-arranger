@@ -1,4 +1,11 @@
-"""Example AWS Lambda function for chip-n-scale"""
+"""
+Example AWS Lambda function for chip-n-scale for saving get_images
+
+Note that this requires three corresponding changes:
+- a prediction docker image which returns image results as a list/array
+- an update to the database: column "output" needs type `bytea`
+- pillow and numpy need to be added to the lambda requirements
+"""
 
 import os
 import pg8000
