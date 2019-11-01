@@ -1,0 +1,167 @@
+service: chip-n-scale-queue-arranger
+
+provider:
+  name: aws
+  runtime: python3.7
+  stage: ${opt:stage, file(./config/config.yml):stage}
+  region: ${opt:region, file(./config/config.yml):region}
+  deploymentBucket: ${file(./config/config.yml):bucket}
+  stackTags: ${file(./config/config.yml):tags}
+
+  iamRoleStatements:
+  - Effect: "Allow"
+    Action:
+      - s3:AbortMultipartUpload
+      - s3:Get*
+      - s3:Put*
+      - s3:List*
+      - s3:DeleteObject
+      - s3:DeleteObjectVersion
+    Resource:
+      - "arn:aws:s3:::${opt:bucket}*"
+
+  - Effect: "Allow"
+    Action:
+      - "sns:Publish"
+    Resource:
+      - !Ref snsTopic
+      - !Ref dlqTopic
+
+  apiGateway:
+    minimumCompressionSize: 0
+    binaryMediaTypes:
+      - '*/*'
+
+custom:
+  stackFullName: ${self:service}-${self:provider.stage}-${self:provider.region}
+
+package:
+  artifact: package.zip
+
+functions:
+  handler:
+    vpc:
+      securityGroupIds:
+        - ${cf:${file(./config/config.yml):inferenceStack}.SecurityGroupIds}
+      subnetIds:
+        - ${cf:${file(./config/config.yml):inferenceStack}.PrivateSubnetOne}
+
+    handler: ${file(./config/config.yml):lambda.handler}
+    memorySize: ${file(./config/config.yml):lambda.memory}
+    timeout: ${file(./config/config.yml):lambda.timeout}
+    reservedConcurrency: ${file(./config/config.yml):lambda.concurrent}
+    environment: ${file(./config/config.yml):lambda.envs}
+    onError: !Ref dlqTopic
+    events:
+      - sqs:
+          arn: !GetAtt
+            - sqsQueue
+            - Arn
+          batchSize: 1
+
+resources:
+  Resources:
+    # From https://www.jeremydaly.com/how-to-use-sns-and-sqs-to-distribute-and-throttle-events/
+    # Create SNS Topic
+    snsTopic:
+      Type: AWS::SNS::Topic
+      Properties:
+        TopicName: ${self:service}-${self:provider.stage}-snsTopic
+
+    # Create our SQS queue
+    sqsQueue:
+      Type: "AWS::SQS::Queue"
+      Properties:
+        VisibilityTimeout: ${file(./config/config.yml):lambda.timeout}
+        QueueName: ${self:service}-${self:provider.stage}-snsQueue
+        RedrivePolicy:
+          deadLetterTargetArn: !GetAtt
+            - deadLetterQueue
+            - Arn
+          maxReceiveCount: ${file(./config/config.yml):sqs.maxReceiveCount}
+
+    # Create SQS Queue Policies
+    snsQueuePolicy:
+      Type: AWS::SQS::QueuePolicy
+      Properties:
+        PolicyDocument:
+          Version: "2012-10-17"
+          Statement:
+            - Sid: "allow-sns-messages"
+              Effect: Allow
+              Principal: "*"
+              Resource: !GetAtt
+                - sqsQueue
+                - Arn
+              Action: "SQS:SendMessage"
+              Condition:
+                ArnEquals:
+                  "aws:SourceArn": !Ref snsTopic
+        Queues:
+          - Ref: sqsQueue
+
+    # Create the subscription to the 'sqsQueue'
+    sqsQueueSubscription:
+      Type: 'AWS::SNS::Subscription'
+      Properties:
+        TopicArn: !Ref snsTopic
+        Endpoint: !GetAtt
+          - sqsQueue
+          - Arn
+        Protocol: sqs
+        RawMessageDelivery: 'false'
+
+    dlqTopic:
+      Type: AWS::SNS::Topic
+      Properties:
+        TopicName: ${self:service}-${self:provider.stage}-dlqTopic
+
+    # Create our Dead Letter SQS
+    deadLetterQueue:
+      Type: AWS::SQS::Queue
+      Properties:
+        QueueName: ${self:service}-${self:provider.stage}-deadLetterQueue
+
+    # Create SQS Queue Policies
+    dlqQueuePolicy:
+      Type: AWS::SQS::QueuePolicy
+      Properties:
+        PolicyDocument:
+          Version: "2012-10-17"
+          Statement:
+            - Sid: "allow-sns-messages"
+              Effect: Allow
+              Principal: "*"
+              Resource: !GetAtt
+                - deadLetterQueue
+                - Arn
+              Action: "SQS:SendMessage"
+              Condition:
+                ArnEquals:
+                  "aws:SourceArn": !Ref dlqTopic
+        Queues:
+          - Ref: deadLetterQueue
+
+    # Create the subscription to the 'WatchbotQueue'
+    dlqQueueSubscription:
+      Type: 'AWS::SNS::Subscription'
+      Properties:
+        TopicArn: !Ref dlqTopic
+        Endpoint: !GetAtt
+          - deadLetterQueue
+          - Arn
+        Protocol: sqs
+        RawMessageDelivery: 'false'
+
+  Outputs:
+    snsTopic:
+      Value:
+        "Ref": snsTopic
+      Export:
+        Name: ${self:custom.stackFullName}-snsTopic
+
+    dlqTopic:
+      Value:
+        "Ref": dlqTopic
+      Export:
+        Name: ${self:custom.stackFullName}-dlqTopic

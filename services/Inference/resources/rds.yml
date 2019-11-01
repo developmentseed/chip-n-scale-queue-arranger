@@ -1,0 +1,57 @@
+#################################################
+# RDS config
+# https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-properties-rds-database-instance.html
+#################################################
+
+Resources:
+  DBSecurityGroup:
+    DependsOn: VPC
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Ingress for RDS Database
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+      - IpProtocol: tcp
+        FromPort: ${file(./config.yml):rds.port}
+        ToPort: ${file(./config.yml):rds.port}
+        SourceSecurityGroupId: !Ref SecurityGroup
+
+  DBSubnetGroup:
+    Type: AWS::RDS::DBSubnetGroup
+    Properties:
+      DBSubnetGroupDescription: 'rds-subnect'
+      SubnetIds: 
+        - !Ref PublicSubnetOne
+        - !Ref PublicSubnetTwo
+
+  RDSDatabase:
+    Type: AWS::RDS::DBInstance
+    Properties:
+      DBName: ${file(./config.yml):rds.name}
+      DBSubnetGroupName: !Ref DBSubnetGroup
+      AllocatedStorage: ${file(./config.yml):rds.storage}
+      DBInstanceClass: ${file(./config.yml):rds.instanceType}
+      Engine: postgres
+      EngineVersion: 9.6.2
+      MasterUsername: ${file(./config.yml):rds.username}
+      MasterUserPassword: ${file(./config.yml):rds.password}
+      Port: ${file(./config.yml):rds.port}
+      VPCSecurityGroups:
+        - !Ref DBSecurityGroup
+
+Outputs:
+  dbConnectionString:
+    Description: RDS Database URL
+    Value:
+      Fn::Join:
+      - ''
+      - - 'postgres://'
+        - ${file(./config.yml):rds.username}
+        - ':'
+        - ${file(./config.yml):rds.password}
+        - '@'
+        - Fn::GetAtt: [RDSDatabase, Endpoint.Address]
+        - ':'
+        - Fn::GetAtt: [RDSDatabase, Endpoint.Port]
+        - '/'
+        - ${file(./config.yml):rds.name}

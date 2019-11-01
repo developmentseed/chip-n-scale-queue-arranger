@@ -13,27 +13,51 @@
 - A corresponding list of tiles over the area you'd like to predict on. If you know the extent of your prediction area as [`GeoJSON`](http://geojson.org/), you can use [`geodex`](https://github.com/developmentseed/geodex), [`mercantile`](https://github.com/mapbox/mercantile), or [`tile-cover`](https://github.com/mapbox/tile-cover)
 - An [AWS account](https://aws.amazon.com/) with sufficient privileges to deploy `config/cloudformation.template.yml`
 
+
+## Stacks
+
+To ease deployement and iteration, the pipeline is split in two AWS Stacks:
+- [inference backend](/services/Inference)
+  - RDS
+  - ELB
+  - VPS
+  - ECS
+- Prediction Lambda function (chip-n-scale)
+
+The Inference backend can be then used by multiple prediction lambda functions.
+
 ## Deploying
 
+1. Install node package
 To create your own project, first install the `node` dependencies:
 
-```sh
-yarn install
+```bash
+# Install and Configure serverless (https://serverless.com/framework/docs/providers/aws/guide/credentials/)
+$ npm install serverless -g
+$ npm install
 ```
 
-Then add values to `config/.env` and to `config/config.yml` to configure your project. Samples for each are provided and you can find more information on the [`kes` documentation page](http://devseed.com/kes/).
 
-Deploy to AWS (takes ~10 minutes):
 
-```sh
-yarn deploy
-...
-CF operation is in state of CREATE_COMPLETE
+2. [**Optional**] Deploy inference backend (see [/services/readme.md](/services/README.md))
 
-The stack test-stack is deployed or updated.
-- The database is available at: postgres://your-db-string
-- The queue is available at https://your-queue-url
+```bash
+$ cd services/Inference/
 
+# Edit config.yml
+
+$ sls deploy
+```
+
+3. Deploy prediction lambda
+
+Then edit `config/config.yml` to configure your project.
+```bash 
+$ sls deploy
+```
+
+4. [**Optional**] Setup RDS db
+```
 Is this the first time setting up this stack? Run the following command to set up the database:
 
   $ yarn setup postgres://your-db-string
@@ -44,13 +68,13 @@ Is this the first time setting up this stack? Run the following command to set u
 This will return a database string to run a migration:
 
 ```sh
-yarn setup [DB_STRING]
+npm setup [DB_STRING]
 ```
 
 If you'd like to confirm the everything is deployed correctly (recommended), run:
 
 ```sh
-yarn verify
+npm verify
 ```
 
 This will test a few portions of the deployed stack to ensure that it will function correctly. Once you're ready, begin pushing tile messages to the SQS queue.

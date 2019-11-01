@@ -1,0 +1,728 @@
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Description": "The AWS CloudFormation template for this Serverless application",
+  "Resources": {
+    "ECSRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "RoleName": "inference-backend-production-us-east-1-ecs-role",
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": [
+                  "ec2.amazonaws.com",
+                  "ecs.amazonaws.com"
+                ]
+              },
+              "Action": "sts:AssumeRole"
+            }
+          ]
+        },
+        "Path": "/",
+        "Policies": [
+          {
+            "PolicyName": "ECSRole",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "cloudwatch:GetMetricStatistics",
+                    "ecr:BatchCheckLayerAvailability",
+                    "ecr:BatchGetImage",
+                    "ecr:GetAuthorizationToken",
+                    "ecr:GetDownloadUrlForLayer",
+                    "ec2:AuthorizeSecurityGroupIngress",
+                    "ec2:Describe*",
+                    "ecs:DeregisterContainerInstance",
+                    "ecs:DescribeClusters",
+                    "ecs:DescribeContainerInstances",
+                    "ecs:DescribeServices",
+                    "ecs:DiscoverPollEndpoint",
+                    "ecs:ListContainerInstances",
+                    "ecs:ListServices",
+                    "ecs:ListTaskDefinitions",
+                    "ecs:ListTasks",
+                    "ecs:Poll",
+                    "ecs:RegisterContainerInstance",
+                    "ecs:RunTask",
+                    "ecs:StartTelemetrySession",
+                    "ecs:Submit*",
+                    "lambda:GetFunction",
+                    "lambda:invokeFunction",
+                    "logs:CreateLogGroup",
+                    "logs:CreateLogStream",
+                    "logs:DescribeLogStreams",
+                    "logs:PutLogEvents"
+                  ],
+                  "Resource": "*"
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "s3:AbortMultipartUpload",
+                    "s3:Get*",
+                    "s3:Put*",
+                    "s3:List*",
+                    "s3:DeleteObject",
+                    "s3:DeleteObjectVersion"
+                  ],
+                  "Resource": [
+                    "arn:aws:s3:::ds-satellite*"
+                  ]
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "elasticloadbalancing:*"
+                  ],
+                  "Resource": "*"
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "VPC": {
+      "Type": "AWS::EC2::VPC",
+      "Properties": {
+        "CidrBlock": "10.0.0.0/16"
+      }
+    },
+    "IP": {
+      "Type": "AWS::EC2::EIP",
+      "Properties": {
+        "Domain": "vpc"
+      }
+    },
+    "InternetGateway": {
+      "Type": "AWS::EC2::InternetGateway"
+    },
+    "VPCGatewayAttachment": {
+      "Type": "AWS::EC2::VPCGatewayAttachment",
+      "Properties": {
+        "VpcId": {
+          "Ref": "VPC"
+        },
+        "InternetGatewayId": {
+          "Ref": "InternetGateway"
+        }
+      }
+    },
+    "PrivateSubnetOne": {
+      "DependsOn": "VPC",
+      "Type": "AWS::EC2::Subnet",
+      "Properties": {
+        "VpcId": {
+          "Ref": "VPC"
+        },
+        "AvailabilityZone": {
+          "Fn::Select": [
+            0,
+            {
+              "Fn::GetAZs": "us-east-1"
+            }
+          ]
+        },
+        "CidrBlock": "10.0.1.0/24"
+      }
+    },
+    "PublicSubnetOne": {
+      "DependsOn": "VPC",
+      "Type": "AWS::EC2::Subnet",
+      "Properties": {
+        "VpcId": {
+          "Ref": "VPC"
+        },
+        "AvailabilityZone": {
+          "Fn::Select": [
+            0,
+            {
+              "Fn::GetAZs": "us-east-1"
+            }
+          ]
+        },
+        "CidrBlock": "10.0.2.0/24"
+      }
+    },
+    "PrivateSubnetTwo": {
+      "DependsOn": "VPC",
+      "Type": "AWS::EC2::Subnet",
+      "Properties": {
+        "VpcId": {
+          "Ref": "VPC"
+        },
+        "AvailabilityZone": {
+          "Fn::Select": [
+            1,
+            {
+              "Fn::GetAZs": "us-east-1"
+            }
+          ]
+        },
+        "CidrBlock": "10.0.3.0/24"
+      }
+    },
+    "PublicSubnetTwo": {
+      "DependsOn": "VPC",
+      "Type": "AWS::EC2::Subnet",
+      "Properties": {
+        "VpcId": {
+          "Ref": "VPC"
+        },
+        "AvailabilityZone": {
+          "Fn::Select": [
+            1,
+            {
+              "Fn::GetAZs": "us-east-1"
+            }
+          ]
+        },
+        "CidrBlock": "10.0.4.0/24"
+      }
+    },
+    "NatGateway": {
+      "Type": "AWS::EC2::NatGateway",
+      "Properties": {
+        "AllocationId": {
+          "Fn::GetAtt": [
+            "IP",
+            "AllocationId"
+          ]
+        },
+        "SubnetId": {
+          "Ref": "PublicSubnetOne"
+        }
+      }
+    },
+    "PrivateRouteTable": {
+      "Type": "AWS::EC2::RouteTable",
+      "Properties": {
+        "VpcId": {
+          "Ref": "VPC"
+        }
+      }
+    },
+    "PrivateRoute": {
+      "Type": "AWS::EC2::Route",
+      "Properties": {
+        "RouteTableId": {
+          "Ref": "PrivateRouteTable"
+        },
+        "DestinationCidrBlock": "0.0.0.0/0",
+        "NatGatewayId": {
+          "Ref": "NatGateway"
+        }
+      }
+    },
+    "PublicRouteTable": {
+      "Type": "AWS::EC2::RouteTable",
+      "Properties": {
+        "VpcId": {
+          "Ref": "VPC"
+        }
+      }
+    },
+    "PublicRoute": {
+      "Type": "AWS::EC2::Route",
+      "Properties": {
+        "RouteTableId": {
+          "Ref": "PublicRouteTable"
+        },
+        "DestinationCidrBlock": "0.0.0.0/0",
+        "GatewayId": {
+          "Ref": "InternetGateway"
+        }
+      }
+    },
+    "PrivateSubnetOneRouteTableAssociation": {
+      "Type": "AWS::EC2::SubnetRouteTableAssociation",
+      "Properties": {
+        "SubnetId": {
+          "Ref": "PrivateSubnetOne"
+        },
+        "RouteTableId": {
+          "Ref": "PublicRouteTable"
+        }
+      }
+    },
+    "PrivateSubnetTwoRouteTableAssociation": {
+      "Type": "AWS::EC2::SubnetRouteTableAssociation",
+      "Properties": {
+        "SubnetId": {
+          "Ref": "PrivateSubnetTwo"
+        },
+        "RouteTableId": {
+          "Ref": "PublicRouteTable"
+        }
+      }
+    },
+    "PublicSubnetOneRouteTableAssociation": {
+      "Type": "AWS::EC2::SubnetRouteTableAssociation",
+      "Properties": {
+        "SubnetId": {
+          "Ref": "PublicSubnetOne"
+        },
+        "RouteTableId": {
+          "Ref": "PublicRouteTable"
+        }
+      }
+    },
+    "PublicSubnetTwoRouteTableAssociation": {
+      "Type": "AWS::EC2::SubnetRouteTableAssociation",
+      "Properties": {
+        "SubnetId": {
+          "Ref": "PublicSubnetTwo"
+        },
+        "RouteTableId": {
+          "Ref": "PublicRouteTable"
+        }
+      }
+    },
+    "SecurityGroup": {
+      "DependsOn": "VPC",
+      "Type": "AWS::EC2::SecurityGroup",
+      "Properties": {
+        "GroupDescription": "SecurityGroup for Serverless Functions",
+        "VpcId": {
+          "Ref": "VPC"
+        }
+      }
+    },
+    "LoadBalancerSecurityGroup": {
+      "Type": "AWS::EC2::SecurityGroup",
+      "Properties": {
+        "VpcId": {
+          "Ref": "VPC"
+        },
+        "GroupDescription": "Access to the load balancer that sits in front of ECS",
+        "SecurityGroupIngress": [
+          {
+            "CidrIp": "0.0.0.0/0",
+            "IpProtocol": -1
+          }
+        ]
+      }
+    },
+    "LoadBalancer": {
+      "Type": "AWS::ElasticLoadBalancingV2::LoadBalancer",
+      "Properties": {
+        "SecurityGroups": [
+          {
+            "Ref": "LoadBalancerSecurityGroup"
+          }
+        ],
+        "Subnets": [
+          {
+            "Ref": "PublicSubnetOne"
+          },
+          {
+            "Ref": "PublicSubnetTwo"
+          }
+        ]
+      }
+    },
+    "TargetGroup": {
+      "Type": "AWS::ElasticLoadBalancingV2::TargetGroup",
+      "Properties": {
+        "VpcId": {
+          "Ref": "VPC"
+        },
+        "Port": 8501,
+        "Protocol": "HTTP",
+        "Matcher": {
+          "HttpCode": "200-299"
+        },
+        "HealthCheckIntervalSeconds": 30,
+        "HealthCheckPath": "/v1/models/your_model",
+        "HealthCheckProtocol": "HTTP",
+        "HealthCheckTimeoutSeconds": 5,
+        "HealthyThresholdCount": 5
+      },
+      "DependsOn": [
+        "LoadBalancer"
+      ]
+    },
+    "LoadBalancerListener": {
+      "Type": "AWS::ElasticLoadBalancingV2::Listener",
+      "Properties": {
+        "LoadBalancerArn": {
+          "Ref": "LoadBalancer"
+        },
+        "Port": 80,
+        "Protocol": "HTTP",
+        "DefaultActions": [
+          {
+            "Type": "forward",
+            "TargetGroupArn": {
+              "Ref": "TargetGroup"
+            }
+          }
+        ]
+      }
+    },
+    "ListenerRule": {
+      "Type": "AWS::ElasticLoadBalancingV2::ListenerRule",
+      "Properties": {
+        "ListenerArn": {
+          "Ref": "LoadBalancerListener"
+        },
+        "Priority": 2,
+        "Conditions": [
+          {
+            "Field": "path-pattern",
+            "Values": [
+              "/v1/models/your_model"
+            ]
+          }
+        ],
+        "Actions": [
+          {
+            "TargetGroupArn": {
+              "Ref": "TargetGroup"
+            },
+            "Type": "forward"
+          }
+        ]
+      }
+    },
+    "ECSCluster": {
+      "Type": "AWS::ECS::Cluster"
+    },
+    "InstanceProfile": {
+      "Type": "AWS::IAM::InstanceProfile",
+      "Properties": {
+        "Path": "/",
+        "Roles": [
+          {
+            "Ref": "ECSRole"
+          }
+        ]
+      }
+    },
+    "ECSTaskDefinition": {
+      "Type": "AWS::ECS::TaskDefinition",
+      "Properties": {
+        "Family": "inference-backend-production-us-east-1-task",
+        "ContainerDefinitions": [
+          {
+            "Name": "inference-task",
+            "Essential": true,
+            "Image": "tensorflow/serving:latest",
+            "MemoryReservation": 1000,
+            "PortMappings": [
+              {
+                "ContainerPort": 8501
+              }
+            ],
+            "LogConfiguration": {
+              "LogDriver": "awslogs",
+              "Options": {
+                "awslogs-group": {
+                  "Ref": "DockerLogs"
+                },
+                "awslogs-region": "us-east-1"
+              }
+            }
+          }
+        ]
+      }
+    },
+    "DockerLogs": {
+      "Type": "AWS::Logs::LogGroup",
+      "Properties": {
+        "LogGroupName": "/aws/ecs/inference-backend-production-us-east-1-docker"
+      }
+    },
+    "ECSSecurityGroup": {
+      "Type": "AWS::EC2::SecurityGroup",
+      "Properties": {
+        "VpcId": {
+          "Ref": "VPC"
+        },
+        "GroupDescription": "Access to the ECS hosts and the tasks/containers that run on them",
+        "SecurityGroupIngress": [
+          {
+            "SourceSecurityGroupId": {
+              "Ref": "LoadBalancerSecurityGroup"
+            },
+            "IpProtocol": -1
+          }
+        ]
+      }
+    },
+    "ECSService": {
+      "Type": "AWS::ECS::Service",
+      "DependsOn": [
+        "ECSAutoScalingGroup",
+        "ECSTaskDefinition",
+        "TargetGroup"
+      ],
+      "Properties": {
+        "Cluster": {
+          "Ref": "ECSCluster"
+        },
+        "DesiredCount": 1,
+        "TaskDefinition": {
+          "Ref": "ECSTaskDefinition"
+        },
+        "DeploymentConfiguration": {
+          "MaximumPercent": 100,
+          "MinimumHealthyPercent": 0
+        },
+        "LoadBalancers": [
+          {
+            "ContainerName": "inference-task",
+            "ContainerPort": 8501,
+            "TargetGroupArn": {
+              "Ref": "TargetGroup"
+            }
+          }
+        ]
+      }
+    },
+    "ECSAutoScalingGroup": {
+      "Type": "AWS::AutoScaling::AutoScalingGroup",
+      "UpdatePolicy": {
+        "AutoScalingRollingUpdate": {
+          "MinInstancesInService": 0
+        }
+      },
+      "Properties": {
+        "VPCZoneIdentifier": [
+          {
+            "Ref": "PublicSubnetOne"
+          },
+          {
+            "Ref": "PublicSubnetTwo"
+          }
+        ],
+        "LaunchConfigurationName": {
+          "Ref": "ContainerInstanceLaunch"
+        },
+        "MinSize": 1,
+        "MaxSize": 1,
+        "DesiredCapacity": 1
+      }
+    },
+    "ContainerInstanceLaunch": {
+      "Type": "AWS::AutoScaling::LaunchConfiguration",
+      "Metadata": {
+        "AWS::CloudFormation::Init": {
+          "config": {
+            "commands": {
+              "01_add_instance_to_cluster": {
+                "command": {
+                  "Fn::Join": [
+                    "",
+                    [
+                      "#!/bin/bash\n",
+                      "echo ECS_CLUSTER=",
+                      {
+                        "Ref": "ECSCluster"
+                      },
+                      " >> /etc/ecs/ecs.config\n",
+                      "echo ECS_ENGINE_TASK_CLEANUP_WAIT_DURATION=1m >> /etc/ecs/ecs.config"
+                    ]
+                  ]
+                }
+              }
+            },
+            "files": {
+              "/etc/cfn/cfn-hup.conf": {
+                "content": {
+                  "Fn::Join": [
+                    "",
+                    [
+                      "[main]\n",
+                      "stack=",
+                      {
+                        "Ref": "AWS::StackId"
+                      },
+                      "\n",
+                      "region=",
+                      {
+                        "Ref": "AWS::Region"
+                      },
+                      "\n"
+                    ]
+                  ]
+                },
+                "mode": "000400",
+                "owner": "root",
+                "group": "root"
+              },
+              "/etc/cfn/hooks.d/cfn-auto-reloader.conf": {
+                "content": {
+                  "Fn::Join": [
+                    "",
+                    [
+                      "[cfn-auto-reloader-hook]\n",
+                      "triggers=post.update\n",
+                      "path=Resources.ContainerInstanceLaunch.Metadata.AWS::CloudFormation::Init\n",
+                      "action=/opt/aws/bin/cfn-init -v --stack ",
+                      {
+                        "Ref": "AWS::StackName"
+                      },
+                      " --resource ContainerInstanceLaunch",
+                      " --region ",
+                      {
+                        "Ref": "AWS::Region"
+                      },
+                      "\n",
+                      "runas=root"
+                    ]
+                  ]
+                }
+              }
+            },
+            "services": {
+              "sysvinit": {
+                "cfn-hup": {
+                  "enabled": "true",
+                  "ensureRunning": "true",
+                  "files": [
+                    "/etc/cfn/cfn-hup.conf",
+                    "/etc/cfn/hooks.d/cfn-auto-reloader.conf"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      },
+      "Properties": {
+        "ImageId": {
+          "Fn::FindInMap": [
+            "AWSRegionToAMI",
+            {
+              "Ref": "AWS::Region"
+            },
+            "AMIID"
+          ]
+        },
+        "SecurityGroups": [
+          {
+            "Ref": "ECSSecurityGroup"
+          }
+        ],
+        "InstanceType": "t2.nano",
+        "IamInstanceProfile": {
+          "Ref": "InstanceProfile"
+        },
+        "BlockDeviceMappings": [
+          {
+            "DeviceName": "/dev/xvdcz",
+            "Ebs": {
+              "DeleteOnTermination": true,
+              "VolumeSize": 100,
+              "VolumeType": "gp2"
+            }
+          }
+        ],
+        "KeyName": "ds-vincents-2019",
+        "UserData": {
+          "Fn::Base64": {
+            "Fn::Join": [
+              "",
+              [
+                "#cloud-config\n",
+                "\nruncmd:\n",
+                " - yum install -y aws-cfn-bootstrap\n",
+                " - /opt/aws/bin/cfn-init -v --stack ",
+                {
+                  "Ref": "AWS::StackName"
+                },
+                " --resource ContainerInstanceLaunch --region \n",
+                {
+                  "Ref": "AWS::Region"
+                },
+                "\n",
+                " - /opt/aws/bin/cfn-signal -e $? --stack ",
+                {
+                  "Ref": "AWS::StackName"
+                },
+                " --resource ECSAutoScalingGroup --region ",
+                {
+                  "Ref": "AWS::Region"
+                },
+                "\n"
+              ]
+            ]
+          }
+        }
+      },
+      "DependsOn": [
+        "ECSSecurityGroup"
+      ]
+    }
+  },
+  "Outputs": {
+    "ServerlessDeploymentBucketName": {
+      "Value": "ds-satellite"
+    },
+    "PrivateSubnetOne": {
+      "Description": "Private Function Subnet",
+      "Value": {
+        "Ref": "PrivateSubnetOne"
+      }
+    },
+    "PublicSubnetOne": {
+      "Description": "Public Subnet",
+      "Value": {
+        "Ref": "PublicSubnetOne"
+      }
+    },
+    "PrivateSubnetTwo": {
+      "Description": "Private Function Subnet",
+      "Value": {
+        "Ref": "PrivateSubnetTwo"
+      }
+    },
+    "PublicSubnetTwo": {
+      "Description": "Public Subnet",
+      "Value": {
+        "Ref": "PublicSubnetTwo"
+      }
+    },
+    "EIP": {
+      "Description": "Elastic IP address",
+      "Value": {
+        "Ref": "IP"
+      }
+    },
+    "ELBEndpoint": {
+      "Description": "Prediction Endpoint",
+      "Value": {
+        "Fn::Join": [
+          "",
+          [
+            "http://",
+            {
+              "Fn::GetAtt": [
+                "LoadBalancer",
+                "DNSName"
+              ]
+            },
+            "/v1/models/your_model"
+          ]
+        ]
+      }
+    }
+  },
+  "Mappings": {
+    "AWSRegionToAMI": {
+      "DOCS": {
+        "LIST": "http://docs.aws.amazon.com/AmazonECS/latest/developerguide/ecs-optimized_AMI.html"
+      },
+      "us-east-1": {
+        "AMIID": "ami-07eb64b216d4d3522"
+      }
+    }
+  }
+}

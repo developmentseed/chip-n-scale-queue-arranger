@@ -1,0 +1,170 @@
+#################################################
+# ECS
+# https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/AWS_ECS.html
+#################################################
+Mappings:
+  AWSRegionToAMI:
+    DOCS:
+      LIST: http://docs.aws.amazon.com/AmazonECS/latest/developerguide/ecs-optimized_AMI.html
+    us-east-1:
+      AMIID: ami-07eb64b216d4d3522 # hardcoded, built via https://github.com/azavea/raster-vision-aws#create-the-custom-ami
+
+Resources:
+  ECSCluster:
+    Type: AWS::ECS::Cluster
+
+  InstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      Path: "/"
+      Roles:
+      - !Ref ECSRole
+
+  ECSTaskDefinition:
+    Type: AWS::ECS::TaskDefinition
+    Properties:
+      Family: ${self:custom.stackFullName}-task
+      ContainerDefinitions:
+      - Name: inference-task
+        Essential: true
+        Image: ${file(./config.yml):ecs.image}
+        MemoryReservation: ${file(./config.yml):ecs.memory}
+        PortMappings:
+          - ContainerPort: ${file(./config.yml):ecs.port}
+        LogConfiguration:
+          LogDriver: awslogs
+          Options:
+            awslogs-group: !Ref DockerLogs
+            awslogs-region: ${self:provider.region}
+
+  DockerLogs:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: /aws/ecs/${self:custom.stackFullName}-docker
+
+  ECSSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      VpcId: !Ref VPC
+      GroupDescription: Access to the ECS hosts and the tasks/containers that run on them
+      SecurityGroupIngress:
+        # Only allow inbound access to ECS from the ELB
+        - SourceSecurityGroupId: !Ref LoadBalancerSecurityGroup
+          IpProtocol: -1
+
+  ECSService:
+    Type: AWS::ECS::Service
+    DependsOn:
+      - ECSAutoScalingGroup
+      - ECSTaskDefinition
+      - TargetGroup    
+    Properties:
+      Cluster: !Ref ECSCluster
+      DesiredCount: 1
+      TaskDefinition: !Ref ECSTaskDefinition
+      DeploymentConfiguration:
+        MaximumPercent: 100
+        MinimumHealthyPercent: 0
+      LoadBalancers:
+        - ContainerName: inference-task
+          ContainerPort: ${file(./config.yml):ecs.port}
+          TargetGroupArn: !Ref TargetGroup
+
+  ECSAutoScalingGroup:
+    Type: AWS::AutoScaling::AutoScalingGroup
+    UpdatePolicy:
+      AutoScalingRollingUpdate:
+        MinInstancesInService: 0
+    Properties:
+      VPCZoneIdentifier:
+        - !Ref PublicSubnetOne
+        - !Ref PublicSubnetTwo
+      LaunchConfigurationName: !Ref ContainerInstanceLaunch
+      MinSize: 1
+      MaxSize: ${file(./config.yml):ecs.maxInstances}
+      DesiredCapacity: ${file(./config.yml):ecs.desiredInstances}
+
+  ContainerInstanceLaunch:
+    Type: AWS::AutoScaling::LaunchConfiguration
+    Metadata:
+      AWS::CloudFormation::Init:
+        config:
+          commands:
+            01_add_instance_to_cluster:
+              command:
+                Fn::Join:
+                  - ""
+                  - - "#!/bin/bash\n"
+                    - "echo ECS_CLUSTER="
+                    - !Ref ECSCluster
+                    - " >> /etc/ecs/ecs.config\n"
+                    - "echo ECS_ENGINE_TASK_CLEANUP_WAIT_DURATION=1m >> /etc/ecs/ecs.config"
+          files:
+            "/etc/cfn/cfn-hup.conf":
+              content:
+                Fn::Join:
+                  - ""
+                  - - "[main]\n"
+                    - "stack="
+                    - !Ref AWS::StackId
+                    - "\n"
+                    - "region="
+                    - !Ref AWS::Region
+                    - "\n"
+              mode: '000400'
+              owner: root
+              group: root
+            "/etc/cfn/hooks.d/cfn-auto-reloader.conf":
+              content:
+                Fn::Join:
+                  - ""
+                  - - "[cfn-auto-reloader-hook]\n"
+                    - "triggers=post.update\n"
+                    - "path=Resources.ContainerInstanceLaunch.Metadata.AWS::CloudFormation::Init\n"
+                    - "action=/opt/aws/bin/cfn-init -v --stack "
+                    - !Ref AWS::StackName
+                    - " --resource ContainerInstanceLaunch"
+                    - " --region "
+                    - !Ref AWS::Region
+                    - "\n"
+                    - "runas=root"
+          services:
+            sysvinit:
+              cfn-hup:
+                enabled: 'true'
+                ensureRunning: 'true'
+                files:
+                - "/etc/cfn/cfn-hup.conf"
+                - "/etc/cfn/hooks.d/cfn-auto-reloader.conf"
+    Properties:
+      ImageId: !FindInMap [AWSRegionToAMI, !Ref "AWS::Region", AMIID]
+      SecurityGroups:
+        - !Ref ECSSecurityGroup
+      InstanceType: ${file(./config.yml):ecs.instanceType}
+      IamInstanceProfile: !Ref InstanceProfile
+      BlockDeviceMappings:
+      - DeviceName: "/dev/xvdcz"
+        Ebs:
+          DeleteOnTermination: true
+          VolumeSize: 100
+          VolumeType: gp2
+      KeyName: ${file(./config.yml):ecs.keyPairName}
+      UserData:
+        Fn::Base64:
+          Fn::Join:
+            - ""
+            - - "#cloud-config\n"
+              - "\nruncmd:\n"
+              - " - yum install -y aws-cfn-bootstrap\n"
+              - " - /opt/aws/bin/cfn-init -v --stack "
+              - !Ref AWS::StackName
+              - " --resource ContainerInstanceLaunch --region \n"
+              - !Ref AWS::Region
+              - "\n"
+              - " - /opt/aws/bin/cfn-signal -e $? --stack "
+              - !Ref AWS::StackName
+              - " --resource ECSAutoScalingGroup --region "
+              - !Ref AWS::Region
+              - "\n"
+    DependsOn:
+    - ECSSecurityGroup

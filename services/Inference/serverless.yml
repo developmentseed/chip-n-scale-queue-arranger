@@ -1,0 +1,18 @@
+service: ${file(./config.yml):stackName}
+
+provider:
+  name: aws
+  stage: ${opt:stage, file(./config.yml):stage}
+  region: ${opt:region, file(./config.yml):region}
+  deploymentBucket: ${file(./config.yml):bucket}
+  stackTags: ${file(./config.yml):tags}
+
+custom:
+  stackFullName: ${self:service}-${self:provider.stage}-${self:provider.region}
+
+resources:
+  - ${file(./resources/iam.yml)} # IAM Resources
+  - ${file(./resources/vpc.yml)} # VPC Functions Resources
+  - ${file(./resources/rds.yml)} # RDS Resources
+  - ${file(./resources/elb.yml)} # ELB Resources
+  - ${file(./resources/ecs.yml)} # ECS Resources

@@ -1,0 +1,72 @@
+#################################################
+# IAM ROLE
+#
+#################################################
+
+Resources:
+  ECSRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: ${self:custom.stackFullName}-ecs-role
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - ec2.amazonaws.com
+                - ecs.amazonaws.com
+            Action: sts:AssumeRole
+      Path: "/"
+      Policies:
+        - PolicyName: ECSRole
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - cloudwatch:GetMetricStatistics
+                  - ecr:BatchCheckLayerAvailability
+                  - ecr:BatchGetImage
+                  - ecr:GetAuthorizationToken
+                  - ecr:GetDownloadUrlForLayer
+                  - ec2:AuthorizeSecurityGroupIngress
+                  - ec2:Describe*
+                  - ecs:DeregisterContainerInstance
+                  - ecs:DescribeClusters
+                  - ecs:DescribeContainerInstances
+                  - ecs:DescribeServices
+                  - ecs:DiscoverPollEndpoint
+                  - ecs:ListContainerInstances
+                  - ecs:ListServices
+                  - ecs:ListTaskDefinitions
+                  - ecs:ListTasks
+                  - ecs:Poll
+                  - ecs:RegisterContainerInstance
+                  - ecs:RunTask
+                  - ecs:StartTelemetrySession
+                  - ecs:Submit*
+                  - lambda:GetFunction
+                  - lambda:invokeFunction
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:DescribeLogStreams
+                  - logs:PutLogEvents
+                Resource: "*"
+          # Allow interaction with internal buckets
+              - Effect: Allow
+                Action:
+                  - s3:AbortMultipartUpload
+                  - s3:Get*
+                  - s3:Put*
+                  - s3:List*
+                  - s3:DeleteObject
+                  - s3:DeleteObjectVersion
+                Resource:
+                  - "arn:aws:s3:::${file(./config.yml):bucket}*"
+
+            # Allow interaction with the load balancer
+              - Effect: Allow
+                Action:
+                  - elasticloadbalancing:*
+                Resource: "*"

@@ -1,46 +1,27 @@
-default:
-  stage: dev
-  stackName: your-stack
-  stackNoDash: YourStack
-  capabilities:
-     - CAPABILITY_NAMED_IAM
-  buckets:
-    internal: your-bucket # existing s3 bucket to store deployment artifacts
+stage: production
+stackName: chip-n-scale
+region: us-east-1
+bucket: your-bucket # existing s3 bucket to store deployment artifacts
 
-  lambdas:
-    DownloadAndPredict:
-      handler: index.handler
-      timeout: 60
-      memory: 512
-      source: dist/download-and-predict
-      queueTrigger: true
-      concurrent: 5
-      envs:
-        TILE_ACCESS_TOKEN: '{{TILE_ACCESS_TOKEN}}'
-        TILE_ENDPOINT: 'https://example.com/{}/{}/{}.jpg?access_token={}'
+tags:
+  project: name-of-project
 
-  rds:
-    username: '{{RDS_USERNAME}}'
-    password: '{{RDS_PASSWORD}}'
-    storage: 20
-    instanceType: 'db.t2.medium'
+# This will be use to retrieve VPC and RDS informations
+inferenceStack: inference-backend-production-us-east-1
 
-  vpc: your-vpc # existing VPC containing the two subnets below
-  subnets:
-    - subnet 1
-    - subnet 2
+lambda:
+  runtime: python3.7
+  handler: app.handler
+  timeout: 60
+  memory: 512
+  concurrent: 5
+  envs:
+    # REQUIRED
+    DATABASE_URL: ${cf:${self.inferenceStack}.dbConnectionString}
+    PREDICTION_ENDPOINT: ${cf:${self.inferenceStack}.ELBEndpoint}
+    # CUSTOM
+    TILE_ACCESS_TOKEN: '{TILE_ACCESS_TOKEN}'
+    TILE_ENDPOINT: 'https://example.com/{}/{}/{}.jpg?access_token={}'
 
-  ecs:
-    availabilityZone: us-east-1a
-    maxInstances: 1
-    desiredInstances: 1
-    keyPairName: your-key-pair
-    instanceType: t2.nano # replace with a GPU instance for faster predictions (and higher costs)
-    image: tensorflow/serving:latest # docker image containing your inference model built with TF Serving
-    memory: 1000 # replace with the memory required by your TF Serving docker image
-
-  sqs:
-    visibilityTimeout: 60
-    maxReceiveCount: 5
-
-  predictionPath: '/v1/models/your_model' # path to your model on the TF Serving docker image; don't include :predict
+sqs:
+  maxReceiveCount: 5
