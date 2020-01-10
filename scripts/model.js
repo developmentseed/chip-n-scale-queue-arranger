@@ -121,6 +121,14 @@ function docker(err, res) {
     `);
 
     CP.execSync(`
-        docker cp ${tmp}/ serving_base:/models/ \
+        docker cp ${tmp}/ serving_base:/models/default/ \
+    `);
+
+    CP.execSync(`
+        docker commit --change "ENV MODEL_NAME default" serving_base developmentseed/default:v1
+    `);
+
+    CP.execSync(`
+        docker kill serving_base
     `);
 }
