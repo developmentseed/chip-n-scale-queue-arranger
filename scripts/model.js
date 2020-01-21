@@ -124,11 +124,16 @@ function docker(err, res) {
         docker cp ${tmp}/ serving_base:/models/default/ \
     `);
 
-    CP.execSync(`
-        docker commit --change "ENV MODEL_NAME default" serving_base developmentseed/default:v1
-    `);
+    const tag = `developmentseed/default:${Math.random().toString(36).substring(2, 15)}`;
 
     CP.execSync(`
-        docker kill serving_base
+        docker commit --change "ENV MODEL_NAME default" serving_base ${tag}
     `);
+
+    console.error(`ok - docker: ${tag}`);
+
+    console.error();
+    console.error(`ok - Run with docker run -p 8501:8501 -t ${tag}`);
+    console.error();
+
 }
