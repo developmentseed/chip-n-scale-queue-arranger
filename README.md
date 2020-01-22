@@ -128,21 +128,6 @@ High GPU utilization, low Lambda errors, and low Lambda run time. :ship:
 
 Running machine learning inference at scale can be challenging. One bottleneck is that it's often hard to ingest/download images fast enough to keep a GPU fully utilized. This seeks to solve that bottleneck by parallelizing the imagery acquisition on AWS Lambda functions and running that separate from the machine learning predictions.
 
-## Note about tile indices + zoom + model tile size
-
-likely your model tile size is fixed, this is set as an argument to a variety of functions. your imagery size is likely either 256x256 or 512x512 from a tile endpoint, or any arbitrary value if requesting with your own custom image function. When you send tile indices of a given zoom level, you will get the following predictions:
-┌───────────────────┬──────────────┬──────────────────┬────────────────────┐
-│ Tile Index Zoom   │ Image Size   │ Model Tile Size  │ # predictions / sqs message    │
-├───────────────────┼──────────────┼──────────────────┼────────────────────┤
-│ 15          │ 256            │ 256                   │ 1
-├────────────────────────┼────────────────────────┼────────────────────────┤
-│ 15          │ 512          │ 256                   │4 (at zoom 16)
-├────────────────────────┼────────────────────────┼────────────────────────┤
-│ 15        │ 1024             │ 256                    │ 16 (at zoom 17)
- │
-└────────────────────────┴────────────────────────┴────────────────────────┘
-
-
 ## Acknowledgements
 
 - [The World Bank](https://www.worldbank.org/), [Nethope](https://nethope.org/), and [UNICEF](https://www.unicef.org/) partnered with us on machine learning projects that provided opportunities to test these capabilities.
