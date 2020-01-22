@@ -24,7 +24,7 @@
     "aws-sdk": "^2.395.0",
     "cli-table": "^0.3.1",
     "d3-queue": "^3.0.7",
-    "js-yaml": "^3.12.1",
+    "js-yaml": "^3.13.1",
     "knex": "^0.16.3",
     "lodash.flatten": "^4.4.0",
     "log-update": "^2.3.0",
