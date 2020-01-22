@@ -8,7 +8,9 @@
 
 - [`node` 8.x](https://nodejs.org/en/)
 - [`yarn`](https://yarnpkg.com/en/) (or [`npm`](https://www.npmjs.com/))
-- A [TensorFlow Serving Docker Image](https://www.tensorflow.org/tfx/serving/serving_basic) which accepts base64 encoded images. For a walkthrough of this process, check our [this post](https://medium.com/devseed/technical-walkthrough-packaging-ml-models-for-inference-with-tf-serving-2a50f73ce6f8).
+- A [TensorFlow Serving Docker Image](https://www.tensorflow.org/tfx/serving/serving_basic) which accepts base64 encoded images.
+    - For a walkthrough of this process, check our [this post](https://medium.com/devseed/technical-walkthrough-packaging-ml-models-for-inference-with-tf-serving-2a50f73ce6f8).
+    - Or if you just have a model, build an image with the included `yarn model` tool
 - An [XYZ raster tile endpoint](https://docs.mapbox.com/api/maps/#maps)
 - A corresponding list of tiles over the area you'd like to predict on. If you know the extent of your prediction area as [`GeoJSON`](http://geojson.org/), you can use [`geodex`](https://github.com/developmentseed/geodex), [`mercantile`](https://github.com/mapbox/mercantile), or [`tile-cover`](https://github.com/mapbox/tile-cover)
 - An [AWS account](https://aws.amazon.com/) with sufficient privileges to deploy `config/cloudformation.template.yml`
