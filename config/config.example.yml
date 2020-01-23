@@ -12,7 +12,7 @@ default:
       handler: index.handler
       timeout: 60
       memory: 512
-      source: dist/download-and-predict
+      source: lambda/package.zip
       queueTrigger: true
       concurrent: 5
       envs:

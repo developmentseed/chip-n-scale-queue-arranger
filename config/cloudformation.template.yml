@@ -39,7 +39,7 @@ Resources:
       Handler: {{handler}}
       MemorySize: {{memory}}
       Role: !GetAtt LambdaProcessingRole.Arn
-      Runtime: {{# if runtime}}{{runtime}}{{else}}nodejs8.10{{/if}}
+      Runtime: {{runtime}}
       {{# if concurrent}}
       ReservedConcurrentExecutions: {{concurrent}}
       {{/if}}
