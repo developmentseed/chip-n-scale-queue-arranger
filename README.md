@@ -39,7 +39,7 @@ Then add values to `config/.env` and to `config/config.yml` to configure your pr
 Deploy to AWS (takes ~10 minutes):
 
 ```sh
-yarn deploy
+kes cf deploy --kes-folder config --kes-class config/kes.js --region your-region
 ...
 CF operation is in state of CREATE_COMPLETE
 
