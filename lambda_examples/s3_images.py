@@ -27,7 +27,7 @@ class S3_DownloadAndPredict(DownloadAndPredict):
 
 
     def get_images(self, s3_keys: List):
-        s3_client=boto3.client('s3') # using WB's credential or ask WB for an IAM role
+        s3_client=boto3.client('s3') 
         for s3_file in s3_keys:
             imagery = s3_client.get_object(Bucket = self.bucket,
                 Key = s3_file)
@@ -56,8 +56,7 @@ def handler(event: SQSEvent, context: Dict[str, Any]) -> None:
     # construct a payload for our prediction endpoint
     s3_keys =[record['body'] for record in event['Records']]
 
-    # TODO
-    # do we need to read data directly from s3.
+    # sent images fron s3 bucket for inference
     tile_indices, payload = dap.get_prediction_payload(s3_keys)
 
     # send prediction request
