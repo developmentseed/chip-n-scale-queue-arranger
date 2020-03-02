@@ -9,7 +9,8 @@ const CP = require('child_process');
 const tmp = os.tmpdir() + '/' + Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15)
 const path = require('path');
 const argv = require('minimist')(process.argv, {
-    boolean: ['help']
+    boolean: ['use-gpu', 'help'],
+    alias: {'use_gpu': 'use-gpu'}
 });
 
 function help() {
@@ -93,11 +94,17 @@ function gs_get(model, cb) {
 
 function docker(err, res) {
     if (err) throw err;
-
-    console.error('ok - pulling tensorflow/serving docker image');
-    CP.execSync(`
-        docker pull tensorflow/serving
-    `);
+    if (argv.use_gpu) {
+      console.error('ok - pulling tensorflow/serving:latest-gpu docker image');
+      CP.execSync(`
+          docker pull tensorflow/serving:latest-gpu
+      `);
+    } else {
+      console.error('ok - pulling tensorflow/serving docker image');
+      CP.execSync(`
+          docker pull tensorflow/serving
+      `);
+      }
 
     // Ignore errors, these are to ensure the next commands don't err
     try {
@@ -117,14 +124,14 @@ function docker(err, res) {
     }
 
     CP.execSync(`
-        docker run -d --name serving_base tensorflow/serving
+        docker run -d --name serving_base tensorflow/serving${argv.use_gpu ? ':latest-gpu' : ''}
     `);
 
     CP.execSync(`
         docker cp ${tmp}/ serving_base:/models/default/ \
     `);
 
-    const tag = `developmentseed/default:${Math.random().toString(36).substring(2, 15)}`;
+    const tag = `developmentseed/default:${Math.random().toString(36).substring(2, 15)}${argv.use_gpu ? '-gpu' : ''}`;
 
     CP.execSync(`
         docker commit --change "ENV MODEL_NAME default" serving_base ${tag}
