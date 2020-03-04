@@ -8,6 +8,7 @@ from os import path as op
 import pg8000
 from typing import List, Dict, Any
 import boto3
+import json
 
 
 from download_and_predict.base import DownloadAndPredict
@@ -27,13 +28,11 @@ class S3_DownloadAndPredict(DownloadAndPredict):
 
 
     def get_images(self, s3_keys: List):
-        s3_client=boto3.client('s3') 
+        s3_client=boto3.client('s3')
         for s3_file in s3_keys:
-            imagery = s3_client.get_object(Bucket = self.bucket,
-                Key = s3_file)
-            yield(op.basename(imagery), imagery)
-
-
+            key = json.loads(s3_file)['image']
+            response = s3_client.get_object(Bucket =self.bucket, Key = key)
+            yield(key, response["Body"].read())
 
 
 def handler(event: SQSEvent, context: Dict[str, Any]) -> None:
