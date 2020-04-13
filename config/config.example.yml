@@ -9,9 +9,10 @@ default:
 
   lambdas:
     DownloadAndPredict:
-      handler: index.handler
+      handler: download_and_predict.handler.handler
       timeout: 60
       memory: 512
+      runtime: python3.7
       source: lambda/package.zip
       queueTrigger: true
       concurrent: 5

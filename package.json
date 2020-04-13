@@ -7,7 +7,7 @@
     "model": "node ./scripts/model.js",
     "build": "node_modules/.bin/webpack",
     "watch": "node_modules/.bin/webpack -w",
-    "deploy": "yarn build && AWS_SDK_LOAD_CONFIG=true kes cf deploy --kes-folder config --kes-class config/kes.js",
+    "deploy": "AWS_SDK_LOAD_CONFIG=true kes cf deploy --kes-folder config --kes-class config/kes.js",
     "setup": "db/setup.sh",
     "delete": "AWS_SDK_LOAD_CONFIG=true kes cf delete --kes-folder config --kes-class config/kes.js",
     "gpu-util": "AWS_SDK_LOAD_CONFIG=true node scripts/gpu-util.js",
