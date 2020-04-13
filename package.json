@@ -15,7 +15,8 @@
     "sqs-push": "AWS_SDK_LOAD_CONFIG=true node scripts/run-sqs-push.js",
     "download": "AWS_SDK_LOAD_CONFIG=true node scripts/download.js",
     "convert-geojson": "python scripts/csv_to_geojson.py",
-    "test": "node test/test_sqs-push.js"
+    "test": "node test/test_sqs-push.js",
+    "tag-logs": "AWS_SDK_LOAD_CONFIG=true node scripts/tag-cloudwatch-logs.js"
   },
   "author": "Development Seed",
   "license": "ISC",

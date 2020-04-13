@@ -48,6 +48,17 @@ Resources:
         - Key: Project
           Value: {{../stackName}}
 
+  {{name}}LambdaFunctionLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName:
+        Fn::Join:
+          - ''
+          - - '/aws/lambda/'
+            - {{../stackName}}
+            - '-'
+            - {{name}}
+
   {{#if queueTrigger}}
   {{../stackNoDash}}{{name}}LambdaEventSourceMapping:
     Type: AWS::Lambda::EventSourceMapping
