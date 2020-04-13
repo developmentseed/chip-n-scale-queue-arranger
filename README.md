@@ -60,6 +60,12 @@ This will return a database string to run a migration:
 yarn setup [DB_STRING]
 ```
 
+By default, the cloudwatch logs are not tagged for resource tracking. To add `Project` tags to the cloudwatch logs, run the following:
+
+```sh
+yarn tag-logs
+```
+
 If you'd like to confirm the everything is deployed correctly (recommended), run:
 
 ```sh
