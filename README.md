@@ -36,7 +36,7 @@ yarn install
 
 Then add values to `config/.env` and to `config/config.yml` to configure your project. Samples for each are provided and you can find more information on the [`kes` documentation page](http://devseed.com/kes/).
 
-Deploy to AWS (takes ~10 minutes):
+Once these values are filled in, you can deploy the project to AWS (takes ~10 minutes):
 
 ```sh
 yarn deploy
@@ -59,6 +59,8 @@ This will return a database string to run a migration:
 ```sh
 yarn setup [DB_STRING]
 ```
+
+If `yarn deploy` fails on the first attempt, you'll need to run `yarn delete` to remove the stack and start again. Otherwise the project will fail on newer updates indicating that it is in the state `ROLLBACK_COMPLETE`. If the first deploy succeeds, you can make future updates by rerunning `yarn deploy`.
 
 By default, the cloudwatch logs are not tagged for resource tracking. To add `Project` tags to the cloudwatch logs, run the following:
 
