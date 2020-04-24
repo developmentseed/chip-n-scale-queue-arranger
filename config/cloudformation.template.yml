@@ -1,10 +1,5 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Description: 'stack: {{stackName}} | stage: {{stage}} | deployed by Kes'
-Tags:
-  - Key: Project
-    Value: {{projectTag}}
-  - Key: Stack
-    value: {{stackName}}
 Resources:
 
   #################################################
