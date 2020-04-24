@@ -2,6 +2,7 @@ default:
   stage: dev
   stackName: your-stack
   stackNoDash: YourStack
+  projectTag: project
   capabilities:
      - CAPABILITY_NAMED_IAM
   buckets:

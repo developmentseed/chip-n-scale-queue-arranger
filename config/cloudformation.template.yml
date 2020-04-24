@@ -1,5 +1,10 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Description: 'stack: {{stackName}} | stage: {{stage}} | deployed by Kes'
+Tags:
+  - Key: Project
+    Value: {{projectTag}}
+  - Key: Stack
+    value: {{stackName}}
 Resources:
 
   #################################################
@@ -46,6 +51,8 @@ Resources:
       Timeout: {{timeout}}
       Tags:
         - Key: Project
+          Value: {{../projectTag}}
+        - Key: Stack
           Value: {{../stackName}}
 
   {{name}}LambdaFunctionLogGroup:
@@ -87,6 +94,8 @@ Resources:
         maxReceiveCount: {{sqs.maxReceiveCount}}
       Tags:
         - Key: Project
+          Value: {{projectTag}}
+        - Key: Stack
           Value: {{stackName}}
 
   {{stackNoDash}}DeadLetterQueue:
@@ -95,6 +104,8 @@ Resources:
       QueueName: {{stackNoDash}}DeadLetterQueue
       Tags:
         - Key: Project
+          Value: {{projectTag}}
+        - Key: Stack
           Value: {{stackName}}
 
   #################################################
@@ -229,6 +240,9 @@ Resources:
         Value: "{{stackName}} ECS"
         PropagateAtLaunch: true
       - Key: Project
+        Value: {{projectTag}}
+        PropagateAtLaunch: true
+      - Key: Stack
         Value: {{stackName}}
         PropagateAtLaunch: true
 
@@ -262,6 +276,8 @@ Resources:
       MasterUserPassword: {{rds.password}}
       Tags:
         - Key: Project
+          Value: {{projectTag}}
+        - Key: Stack
           Value: {{stackName}}
 
   #################################################
@@ -283,6 +299,8 @@ Resources:
         {{/each}}
       Tags:
         - Key: Project
+          Value: {{projectTag}}
+        - Key: Stack
           Value: {{stackName}}
 
   {{stackNoDash}}TargetGroup:
