@@ -19,7 +19,10 @@ function help() {
     console.error();
     console.error('Usage:');
     console.error();
-    console.error('  .yarn model <gs:// folder containing .pb model');
+    console.error('  yarn model <gs:// folder containing .pb model> [--use_gpu]');
+    console.error();
+    console.error('Options:');
+    console.error(' --use_gpu   builds and tags gpu tfserving image, without this flag cpu image will be used');
     console.error();
 }
 
