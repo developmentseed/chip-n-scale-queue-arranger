@@ -128,7 +128,7 @@ Resources:
         Image: {{ecs.image}}
         MemoryReservation: {{ecs.memory}}
         PortMappings:
-          - ContainerPort: 8501
+          - ContainerPort: 8080
         LogConfiguration:
           LogDriver: awslogs
           Options:
@@ -153,7 +153,7 @@ Resources:
         MinimumHealthyPercent: 0
       LoadBalancers:
         - ContainerName: {{stackNoDash}}TaskDefinition
-          ContainerPort: 8501
+          ContainerPort: 8080
           TargetGroupArn: !Ref {{stackNoDash}}TargetGroup
 
   {{stackNoDash}}ECSCluster:

@@ -1,0 +1,48 @@
+default:
+  stage: dev
+  stackName: lgbm-test
+  stackNoDash: LGBMTest
+  projectTag: rubber-risk
+  capabilities:
+     - CAPABILITY_NAMED_IAM
+  buckets:
+    internal: cccmc-rubber-risk # existing s3 bucket to store deployment artifacts
+
+  lambdas:
+    DownloadAndPredict:
+      handler: download_and_predict.handler.handler
+      timeout: 60
+      memory: 512
+      runtime: python3.7
+      source: lambda/package.zip
+      queueTrigger: true
+      concurrent: 5
+      envs:
+        TILE_ACCESS_TOKEN: '{{TILE_ACCESS_TOKEN}}'
+        TILE_ENDPOINT: 'https://api.mapbox.com/styles/v1/mapbox/satellite-v9/tiles/256/{}/{}/{}?access_token={}'
+
+  rds:
+    username: '{{RDS_USERNAME}}'
+    password: '{{RDS_PASSWORD}}'
+    storage: 20
+    instanceType: 'db.t2.medium'
+
+  vpc: vpc-dfe524ba # existing VPC containing the two subnets below
+  subnets:
+    - subnet-44f69821
+    - subnet-7945cb75
+
+  ecs:
+    availabilityZone: us-east-1a
+    maxInstances: 1
+    desiredInstances: 1
+    keyPairName: cccmc-cns
+    instanceType: t2.xlarge # replace with a GPU instance for faster predictions (and higher costs)
+    image: developmentseed/cccmc-serving:latest # docker image containing your inference model built with TF Serving
+    memory: 4000 # replace with the memory required by your TF Serving docker image
+
+  sqs:
+    visibilityTimeout: 60
+    maxReceiveCount: 1
+
+  predictionPath: '/v1/models/model' # path to your model on the TF Serving docker image; don't include :predict
