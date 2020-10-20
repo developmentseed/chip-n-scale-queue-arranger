@@ -14,6 +14,12 @@ from PIL import Image
 import numpy as np
 from mercantile import Tile
 
+from rasterio.plot import reshape_as_image
+from rio_tiler_pds.sentinel.aws import S2COGReader
+from rio_tiler.mosaic.methods.defaults import MedianMethod
+# https://github.com/developmentseed/cogeo-mosaic.git@390be1f1b265e7068cd06d804f7e1db43413235a
+from cogeo_mosaic.backends import MosaicBackend
+
 from download_and_predict.base import DownloadAndPredict
 from download_and_predict.custom_types import SQSEvent
 
@@ -29,26 +35,38 @@ class LGBMDownloader(DownloadAndPredict):
         ))
         self.sentinel_wms_kwargs = sentinel_wms_kwargs
 
-    def get_images(self, tiles):
+    def get_images(self, tiles, layer: str):
         for tile in tiles:
-            yield (tile, np.random.rand(256, 256, 8))
+            NDVI = "(B08 - B04) / (B08 + B04)"
+            NDWI = "(B03 - B08) / (B03 + B08)"
+            SAVI = "1.5 * (B08-B04) / (0.5 + B88 + B04)"
+            with MosaicBackend(layer, reader=S2COGReader,) as src_dst:
+                (data, _), _ = src_dst.tile(
+                    tile.x,
+                    tile.y,
+                    tile.z,
+                    pixel_selection=MedianMethod(),
+                    tilesize=256,
+                    expression=f"B02,B03,B04,B08,B8A,B11,B12,{NDVI},{NDWI},{SAVI}"
+                )
+                yield (tile, reshape_as_image(data))
 
-    def get_prediction_payload(self, tiles:List[Tile]) -> Tuple[List[Tile], str]:
+    def get_prediction_payload(self, tiles: List[Tile], layer) -> Tuple[List[Tile], str]:
         """
         tiles: list mercantile Tiles
         imagery: str an imagery API endpoint with three variables {z}/{x}/{y} to replace
 
         Return:
         - an array of string arrays to send to our prediction endpoint
-        - a corresponding array of tile indices
+        - a correspondK ing array of tile indices
 
         These arrays are returned together because they are parallel operations: we
         need to match up the tile indicies with their corresponding images
         """
-        tiles_and_images = self.get_images(tiles)
+        tiles_and_images = self.get_images(tiles, layer)
         tile_indices, images = zip(*tiles_and_images)
 
-        payload = str([np.random.rand(256, 256, 8).reshape(256 * 256, 8).tolist()])
+        payload = [img.reshape(256 * 256, img.shape[-1]).tolist() for img in images]
 
         return (list(tile_indices), payload)
 
@@ -59,6 +77,7 @@ def prediction_to_image(pred: List) -> bytes:
     byts = BytesIO()
     img.save(byts, format='png')
     return byts.getvalue()
+
 
 def handler(event: SQSEvent, context: Dict[str, Any]) -> None:
     # read all our environment variables to throw errors early
@@ -80,8 +99,13 @@ def handler(event: SQSEvent, context: Dict[str, Any]) -> None:
     # get tiles from our SQS event
     tiles = dap.get_tiles(event)
 
+    # TO DO we should pass tile + layer in the SQS
+    tiles, layer = dap.get_tiles(event)
+
+    layer = f"{prediction_endpoint}:{layer}"
+
     # construct a payload for our prediction endpoint
-    tile_indices, payload = dap.get_prediction_payload(tiles)
+    tile_indices, payload = dap.get_prediction_payload(tiles, layer)
 
     # send prediction request
     content = dap.post_prediction(payload)
