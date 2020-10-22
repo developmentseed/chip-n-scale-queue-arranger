@@ -38,7 +38,6 @@ class LGBMDownloader(DownloadAndPredict):
     def get_images(self, tiles, layer: str):
         for tile in tiles:
             NDVI = "(B08 - B04) / (B08 + B04)"
-            NDWI = "(B03 - B08) / (B03 + B08)"
             SAVI = "1.5 * (B08-B04) / (0.5 + B88 + B04)"
             with MosaicBackend(layer, reader=S2COGReader,) as src_dst:
                 (data, _), _ = src_dst.tile(
@@ -47,7 +46,7 @@ class LGBMDownloader(DownloadAndPredict):
                     tile.z,
                     pixel_selection=MedianMethod(),
                     tilesize=256,
-                    expression=f"B02,B03,B04,B08,B8A,B11,B12,{NDVI},{NDWI},{SAVI}"
+                    expression=f"B02,B8A,B11,B12,{NDVI},{SAVI}"
                 )
                 yield (tile, reshape_as_image(data))
 
@@ -66,7 +65,7 @@ class LGBMDownloader(DownloadAndPredict):
         tiles_and_images = self.get_images(tiles, layer)
         tile_indices, images = zip(*tiles_and_images)
 
-        payload = [img.reshape(256 * 256, img.shape[-1]).tolist() for img in images]
+        payload = str([img.reshape(SHAPE[0] * SHAPE[1], img.shape[-1]).tolist() for img in images])
 
         return (list(tile_indices), payload)
 
@@ -98,14 +97,10 @@ def handler(event: SQSEvent, context: Dict[str, Any]) -> None:
 
     # get tiles from our SQS event
     tiles = dap.get_tiles(event)
-
-    # TO DO we should pass tile + layer in the SQS
-    tiles, layer = dap.get_tiles(event)
-
-    layer = f"{prediction_endpoint}:{layer}"
+    print(tiles, imagery)
 
     # construct a payload for our prediction endpoint
-    tile_indices, payload = dap.get_prediction_payload(tiles, layer)
+    tile_indices, payload = dap.get_prediction_payload(tiles, imagery)
 
     # send prediction request
     content = dap.post_prediction(payload)
