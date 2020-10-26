@@ -16,10 +16,12 @@ from PIL import Image
 import numpy as np
 from mercantile import Tile
 
+from botocore.exceptions import ClientError
+
 from rasterio.plot import reshape_as_image
+from rio_tiler.errors import TileOutsideBounds
 from rio_tiler_pds.sentinel.aws import S2COGReader
 from rio_tiler.mosaic.methods.defaults import MedianMethod
-# https://github.com/developmentseed/cogeo-mosaic.git@390be1f1b265e7068cd06d804f7e1db43413235a
 from cogeo_mosaic.backends import MosaicBackend
 
 from download_and_predict.base import DownloadAndPredict
@@ -41,7 +43,7 @@ class LGBMDownloader(DownloadAndPredict):
     def get_images(self, tiles, layer: str):
         NDVI = "(B08 - B04) / (B08 + B04)"
         SAVI = "1.5 * (B08-B04) / (0.5 + B08 + B04)"
-        
+
         for tile in tiles:
             # in the order of Carole King's, "You've Got a Friend"
             data = list()
@@ -55,7 +57,8 @@ class LGBMDownloader(DownloadAndPredict):
                             tile.z,
                             pixel_selection=MedianMethod(),
                             tilesize=256,
-                            expression=f"B02,B8A,B11,B12,{NDVI},{SAVI}"
+                            expression=f"B02,B8A,B11,B12,{NDVI},{SAVI}",
+                            allowed_exceptions=(ClientError, TileOutsideBounds,),
                         )
                         data.append(reshape_as_image(season_data))
                 except Exception:
@@ -64,7 +67,7 @@ class LGBMDownloader(DownloadAndPredict):
                     data.append(np.zeros((256, 256, 6)))
 
             yield (tile, np.reshape(np.stack(data, axis=2), (256 * 256, 24)))
-                
+
 
     def get_prediction_payload(self, tiles: List[Tile], layer) -> Tuple[List[Tile], str]:
         """
