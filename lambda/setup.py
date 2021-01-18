@@ -4,7 +4,7 @@ from setuptools import setup, find_packages
 
 inst_reqs = [
     "mercantile",
-    "pg8000",
+    "pg8000==1.16.4",
     "requests",
     "pillow",
     "numpy"
