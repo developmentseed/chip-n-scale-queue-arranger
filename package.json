@@ -29,7 +29,7 @@
     "knex": "^0.16.3",
     "lodash.flatten": "^4.4.0",
     "log-update": "^2.3.0",
-    "minimist": "^1.2.0",
+    "minimist": "^1.2.6",
     "mkdirp": "^0.5.1",
     "node-ssh": "^5.1.2",
     "pg": "^7.8.0",
