@@ -26,7 +26,7 @@
     "cli-table": "^0.3.1",
     "d3-queue": "^3.0.7",
     "js-yaml": "^3.12.1",
-    "knex": "^0.16.3",
+    "knex": "^2.4.0",
     "lodash.flatten": "^4.4.0",
     "log-update": "^2.3.0",
     "minimist": "^1.2.0",
